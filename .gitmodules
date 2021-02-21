@@ -1,0 +1,6 @@
+[submodule "lib/sqlite_orm"]
+	path = lib/sqlite_orm
+	url = https://github.com/fnc12/sqlite_orm.git
+[submodule "lib/xtime_cpp"]
+	path = lib/xtime_cpp
+	url = https://github.com/NewYaroslav/xtime_cpp.git
