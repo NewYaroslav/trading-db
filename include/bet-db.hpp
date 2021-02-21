@@ -411,6 +411,12 @@ namespace trading_db {
             }
         };
 
+        /** \brief Записать буфер в БД и очистить его
+         */
+        void flush() {
+            write_buffer_to_db();
+        }
+
         /** \brief Очистить БД от данных ставок
          */
         void clear() {
