@@ -1,6 +1,6 @@
 #pragma once
-#ifndef BET_DB_HPP_INCLUDED
-#define BET_DB_HPP_INCLUDED
+#ifndef TRADING_DB_BET_DB_HPP_INCLUDED
+#define TRADING_DB_BET_DB_HPP_INCLUDED
 
 #include <sqlite_orm/sqlite_orm.h>
 #include <xtime.hpp>
@@ -564,4 +564,4 @@ namespace trading_db {
     };
 }
 
-#endif // BET_DB_HPP_INCLUDED
+#endif // TRADING_DB_BET_DB_HPP_INCLUDED
