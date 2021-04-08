@@ -4,3 +4,6 @@
 [submodule "lib/xtime_cpp"]
 	path = lib/xtime_cpp
 	url = https://github.com/NewYaroslav/xtime_cpp.git
+[submodule "lib/ImGuiColorTextEdit"]
+	path = lib/ImGuiColorTextEdit
+	url = https://github.com/NewYaroslav/ImGuiColorTextEdit.git

@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../../include/tick-db.hpp"
+#include <trading-db/tick-db.hpp>
 //#include <sqlite_orm/sqlite_orm.h>
 #include <xtime.hpp>
 
@@ -7,6 +7,44 @@ int main() {
     std::cout << "Hello world!" << std::endl;
     const std::string path("test_storage.db");
     {
+        std::map<std::string, std::shared_ptr<trading_db::TickDb>> ticks_db;
+        std::vector<std::string> symbols = {
+            "AUDCAD","AUDCHF","AUDJPY","AUDNZD",
+            "AUDUSD","CADCHF","CADJPY","CHFJPY",
+            "EURAUD","EURCAD","EURCHF","EURGBP",
+            "EURJPY","EURNZD","EURUSD","GBPAUD",
+            "GBPCAD","GBPCHF","GBPJPY","GBPNZD",
+            "GBPUSD","NZDCAD","NZDCHF","NZDJPY",
+            "NZDUSD","USDCAD","USDCHF","USDJPY"
+        };
+        for(size_t i = 0; i < symbols.size(); ++i) {
+            std::string path("storage/");
+            path += symbols[i];
+            path += ".db";
+            ticks_db[symbols[i]] = std::make_shared<trading_db::TickDb>(path);
+            ticks_db[symbols[i]]->set_symbol(symbols[i]);
+        }
+
+        trading_db::AsynTasks asyn_tasks;
+
+        asyn_tasks.creat_task([&](){
+            for(size_t j = 0; j < 1000000; ++j)
+            for(size_t i = 0; i < symbols.size(); ++i) {
+                uint64_t timestamp_ms = (uint64_t)(xtime::get_ftimestamp() * 1000.0d);
+                double bid = 10.0d + i;
+                double ask = 11.0d + i;
+                std::cout << symbols[i] << " bid " << bid << " ask " << ask << " t: " << timestamp_ms << std::endl;
+                ticks_db[symbols[i]]->write(timestamp_ms, timestamp_ms + 1, bid, ask);
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        });
+
+        std::cout << "end" << std::endl;
+        while(true) {};
+        return 0;
+
+    }
+    if (false) {
         std::cout << "#test 1" << std::endl;
         trading_db::TickDb tick_db("test_storage.db");
         trading_db::TickDb tick_db2("test_storage.db");
@@ -28,7 +66,7 @@ int main() {
             tick_db.write(tick);
             ticks_1.push_back(tick);
         }
-        tick_db.stop_write(1000*1000);
+        tick_db.stop_write();
         tick_db.wait();
 
         std::cout << "check price 1" << std::endl;
@@ -54,7 +92,7 @@ int main() {
             ticks_2.push_back(tick);
         }
         ticks_2.push_back(trading_db::TickDb::Tick());
-        tick_db.stop_write(1999*1000);
+        tick_db.stop_write();
         tick_db.wait();
 
         std::cout << "check price 2" << std::endl;
@@ -81,7 +119,7 @@ int main() {
             tick_db.write(tick);
             ticks_3.push_back(tick);
         }
-        tick_db.stop_write(3000*1000);
+        tick_db.stop_write();
         tick_db.wait();
 
         std::cout << "check price 3" << std::endl;
@@ -165,7 +203,7 @@ int main() {
             tick_db.write(tick);
         }
 
-        tick_db.stop_write(1000000);
+        tick_db.stop_write();
 
         std::cout << "get_price" << std::endl;
         for(size_t i = 1000000 - 110; i <= 1000000 - 100; ++i) {
