@@ -46,7 +46,7 @@ namespace trading_db {
             Tick() {};
 
             bool empty() const noexcept {
-                return (bid == 0);
+                return (timestamp == 0);
             }
         };
 
@@ -621,6 +621,422 @@ namespace trading_db {
             return Tick();
 		}
 
+		xtime::period_t get_data_period() {
+            xtime::period_t data_period;
+            data_period.start = 0;
+            data_period.stop = 0;
+            create_protected_transaction([&](){
+                if(auto start_date = storage.min(&Tick::timestamp)){
+                    data_period.start = *start_date;
+                }
+                if(auto stop_date = storage.max(&Tick::timestamp)){
+                    data_period.stop = *stop_date;
+                }
+            },[&](const uint64_t error_counter){
+                TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name
+                << " sqlite get_all error! Line " << __LINE__ << ", counter = "
+                << error_counter << std::endl;
+            });
+            data_period.start /= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop /= xtime::MILLISECONDS_IN_SECOND;
+            return data_period;
+		}
+
+		private:
+		std::vector<Tick> first_upper_buffer_2;
+        xtime::period_t first_upper_period_2;
+		std::vector<Tick> first_upper_buffer_1;
+		xtime::period_t first_upper_period_1;
+		size_t first_upper_buffer_size = 10000;
+		size_t first_upper_buffer_index = 0;
+
+		public:
+
+        /** \brief Получить первый ближайший тик выше указанной метки времени
+         * \param timestamp_ms      Метка времени
+         * \param use_server_time   Тип времени, если true, используется время сервера
+         * \return Тик, время которого равно или больше указанной метки времени
+         */
+		inline Tick get_first_upper(const uint64_t timestamp_ms, const bool use_server_time = false) {
+            using namespace sqlite_orm;
+            if (use_server_time) {
+                if (first_upper_buffer_2.empty() ||
+                    timestamp_ms < first_upper_period_2.start ||
+                    timestamp_ms > first_upper_period_2.stop) {
+
+                    first_upper_period_2.start = timestamp_ms;
+                    first_upper_buffer_2 = get_first_upper_array(timestamp_ms, first_upper_buffer_size, true);
+                    if (first_upper_buffer_2.empty()) first_upper_period_2.stop = timestamp_ms;
+                    else first_upper_period_2.stop = first_upper_buffer_2.back().server_timestamp;
+                }
+
+                if (!first_upper_buffer_2.empty()) {
+                    auto it = std::lower_bound(
+                        first_upper_buffer_2.begin(),
+                        first_upper_buffer_2.end(),
+                        timestamp_ms,
+                        [](const Tick &lhs, const uint64_t &timestamp) {
+                        return lhs.server_timestamp < timestamp;
+                    });
+                    if (it == first_upper_buffer_2.end()) return Tick();
+                    return *it;
+                }
+                return Tick();
+            } else {
+                if (first_upper_buffer_1.empty() ||
+                    timestamp_ms < first_upper_period_1.start ||
+                    timestamp_ms > first_upper_period_1.stop) {
+
+                    first_upper_period_1.start = timestamp_ms;
+                    first_upper_buffer_1 = get_first_upper_array(timestamp_ms, first_upper_buffer_size, false);
+                    if (first_upper_buffer_1.empty()) first_upper_period_1.stop = timestamp_ms;
+                    else first_upper_period_1.stop = first_upper_buffer_1.back().timestamp;
+                }
+
+                if (!first_upper_buffer_1.empty()) {
+                    auto it = std::lower_bound(
+                        first_upper_buffer_1.begin(),
+                        first_upper_buffer_1.end(),
+                        timestamp_ms,
+                        [](const Tick &lhs, const uint64_t &timestamp) {
+                        return lhs.timestamp < timestamp;
+                    });
+                    if (it == first_upper_buffer_1.end()) return Tick();
+                    return *it;
+                }
+                return Tick();
+            }
+            return Tick();
+		}
+
+#if(0)
+		inline Tick get_first_upper(const uint64_t timestamp_ms, const bool use_server_time = false) {
+            using namespace sqlite_orm;
+            std::vector<Tick> first_tick;
+            if (use_server_time) {
+                first_tick = storage.get_all<Tick>(
+                        where(c(&Tick::server_timestamp) >= timestamp_ms),
+                        order_by(&Tick::server_timestamp).asc(),
+                        limit(1));
+            } else {
+                first_tick = storage.get_all<Tick>(
+                        where(c(&Tick::timestamp) >= timestamp_ms),
+                        order_by(&Tick::timestamp).asc(),
+                        limit(1));
+            }
+            return first_tick.empty() ? Tick() : first_tick[0];
+		}
+#endif
+
+        /** \brief Получить массив ближайших тиков выше указанной метки времени
+         * \param timestamp_ms      Метка времени
+         * \param length            Длина массива
+         * \param use_server_time   Тип времени, если true, используется время сервера
+         * \return Массив тиков, время которых равно или больше указанной метки времени
+         */
+		inline std::vector<Tick> get_first_upper_array(const uint64_t timestamp_ms, const size_t length, const bool use_server_time = false) {
+            using namespace sqlite_orm;
+            std::vector<Tick> first_array;
+            if (use_server_time) {
+                first_array = storage.get_all<Tick>(
+                        where(c(&Tick::server_timestamp) >= timestamp_ms),
+                        order_by(&Tick::server_timestamp).asc(),
+                        limit(length));
+            } else {
+                first_array = storage.get_all<Tick>(
+                        where(c(&Tick::timestamp) >= timestamp_ms),
+                        order_by(&Tick::timestamp).asc(),
+                        limit(length));
+            }
+            if (first_array.size() < length) first_array.resize(length, Tick());
+            return first_array;
+		}
+
+        /** \brief Получить первый ближайший тик ниже указанной метки времени
+         * \param timestamp_ms      Метка времени
+         * \param use_server_time   Тип времени, если true, используется время сервера
+         * \return Тик, время которого равно или меньше указанной метки времени
+         */
+		inline Tick get_first_lower(const uint64_t timestamp_ms, const bool use_server_time = false) {
+            using namespace sqlite_orm;
+            std::vector<Tick> first_tick;
+            if (use_server_time) {
+                first_tick = storage.get_all<Tick>(
+                        where(c(&Tick::server_timestamp) <= timestamp_ms),
+                        order_by(&Tick::server_timestamp).desc(),
+                        limit(1));
+            } else {
+                first_tick = storage.get_all<Tick>(
+                        where(c(&Tick::timestamp) <= timestamp_ms),
+                        order_by(&Tick::timestamp).desc(),
+                        limit(1));
+            }
+            return first_tick.empty() ? Tick() : first_tick[0];
+		}
+
+		/** \brief Получить массив ближайших тиков ниже указанной метки времени
+         * \param timestamp_ms      Метка времени
+         * \param length            Длина массива
+         * \param use_server_time   Тип времени, если true, используется время сервера
+         * \return Массив тиков, время которых равно или меньше указанной метки времени
+         */
+		inline std::vector<Tick> get_first_lower_array(const uint64_t timestamp_ms, const size_t length, const bool use_server_time = false) {
+            using namespace sqlite_orm;
+            std::vector<Tick> first_array;
+            if (use_server_time) {
+                first_array = storage.get_all<Tick>(
+                        where(c(&Tick::server_timestamp) <= timestamp_ms),
+                        order_by(&Tick::server_timestamp).desc(),
+                        limit(length));
+            } else {
+                first_array = storage.get_all<Tick>(
+                        where(c(&Tick::timestamp) <= timestamp_ms),
+                        order_by(&Tick::timestamp).desc(),
+                        limit(length));
+            }
+            if (first_array.size() < length) first_array.resize(length, Tick());
+            return first_array;
+		}
+
+        /** \brief Починка данных
+         * \param wait_tick_ms Время ожидания тика
+         */
+		void fix_data(const uint32_t wait_tick_ms) {
+            xtime::period_t data_period = get_data_period();
+            data_period.start *= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop *= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop += wait_tick_ms;
+            xtime::timestamp_t last_timestamp = data_period.start;
+            xtime::timestamp_t end_timestamp = 0;
+            std::vector<EndTickStamp> array_fix;
+            for(xtime::timestamp_t t = data_period.start; t <= data_period.stop; ++t) {
+                using namespace sqlite_orm;
+                std::vector<Tick> beg_tick = storage.get_all<Tick>(
+                        where(c(&Tick::timestamp) >= t),
+                        order_by(&Tick::timestamp).asc(),
+                        limit(1));
+
+                if (beg_tick.empty()) {
+                    /*
+                    if (last_timestamp == data_period.start) continue;
+                    const xtime::timestamp_t diff = t - last_timestamp;
+                    if (diff >= wait_tick_ms) {
+                        if (end_timestamp == last_timestamp) continue;
+                        if(auto end_tick_stamp = storage.get_pointer<EndTickStamp>(last_timestamp)){
+                            end_timestamp = last_timestamp;
+                        } else {
+                            if (!array_fix.empty() && array_fix.back().timestamp == last_timestamp) continue;
+                            std::cout << "error! " << xtime::get_str_date_time(last_timestamp / xtime::MILLISECONDS_IN_SECOND) << std::endl;
+                            array_fix.push_back(EndTickStamp(last_timestamp));
+                        }
+                    }
+                    */
+                } else {
+
+                    const xtime::timestamp_t diff = beg_tick[0].timestamp - last_timestamp;
+                    if (diff >= wait_tick_ms) {
+                        if (end_timestamp == last_timestamp) continue;
+                        if(auto end_tick_stamp = storage.get_pointer<EndTickStamp>(last_timestamp)){
+                            end_timestamp = last_timestamp;
+                        } else {
+                            if (!array_fix.empty() && array_fix.back().timestamp == last_timestamp) continue;
+                            std::cout << "error! " << xtime::get_str_date_time(last_timestamp / xtime::MILLISECONDS_IN_SECOND) << std::endl;
+                            array_fix.push_back(EndTickStamp(last_timestamp));
+                        }
+                    }
+                    std::cout << xtime::get_str_date_time_ms((double)t / (double)xtime::MILLISECONDS_IN_SECOND) << " diff " << ((double)diff / (double)xtime::MILLISECONDS_IN_SECOND) << std::endl;
+                    last_timestamp = beg_tick[0].timestamp;
+                    t = last_timestamp;
+                    end_timestamp = 0;
+                }
+
+                /*
+                if(auto tick = storage.get_pointer<Tick>(t)){
+                    last_timestamp = tick->timestamp;
+                } else {
+                    const xtime::timestamp_t diff = t - last_timestamp;
+                    if (diff >= wait_tick_ms) {
+                        if(auto end_tick_stamp = storage.get_pointer<EndTickStamp>(last_timestamp)){
+
+                        } else {
+                            if (!array_fix.empty() && array_fix.back().timestamp == last_timestamp) continue;
+                            std::cout << "error! " << xtime::get_str_date_time(last_timestamp / xtime::MILLISECONDS_IN_SECOND) << std::endl;
+                            array_fix.push_back(EndTickStamp(last_timestamp));
+                        }
+                    }
+                }
+                */
+                if (t % 60000 == 0) std::cout << xtime::get_str_date_time(t / xtime::MILLISECONDS_IN_SECOND) << std::endl;
+
+            } // for t
+            std::cout << "fixed " << array_fix.size() << std::endl;
+            create_protected_transaction([&](){
+                for (const EndTickStamp& i : array_fix) {
+                    storage.replace(i);
+                }
+            },[&](const uint64_t error_counter){
+                TRADING_DB_TICK_DB_PRINT
+                    << "trading-db: " << db_file_name
+                    << " sqlite transaction error! Line " << __LINE__ << ", counter = "
+                    << error_counter << std::endl;
+            });
+		}
+
+		void backtesting(
+                xtime::period_t data_period,
+                const std::function<void(const Tick &tick, const bool is_stop)> &callback) {
+            data_period.start *= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop *= xtime::MILLISECONDS_IN_SECOND;
+            xtime::timestamp_t last_timestamp = data_period.start;
+            xtime::timestamp_t end_timestamp = 0;
+            std::vector<EndTickStamp> array_fix;
+            for(xtime::timestamp_t t = data_period.start; t <= data_period.stop; ++t) {
+                using namespace sqlite_orm;
+                std::vector<Tick> first_tick = storage.get_all<Tick>(
+                        where(c(&Tick::timestamp) >= t),
+                        order_by(&Tick::timestamp).asc(),
+                        limit(1));
+
+                if (!first_tick.empty()) {
+                    t = last_timestamp = first_tick[0].timestamp;
+                    if (last_timestamp > end_timestamp || end_timestamp == 0) {
+                        std::vector<EndTickStamp> first_end = storage.get_all<EndTickStamp>(
+                            where(c(&EndTickStamp::timestamp) >= t),
+                            order_by(&EndTickStamp::timestamp).asc(),
+                            limit(1));
+                        if (!first_end.empty()) {
+                            end_timestamp = first_end[0].timestamp;
+                        } else {
+                            //?
+                        }
+                    }
+                    callback(first_tick[0], (last_timestamp == end_timestamp));
+                }
+            } // for t
+		}
+
+		template<class T>
+		static void backtesting(
+                T &array_db,
+                xtime::period_t data_period,
+                const std::function<void(
+                    const size_t index_db,
+                    const Tick &tick)> &callback) {
+            data_period.start *= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop *= xtime::MILLISECONDS_IN_SECOND;
+            std::vector<uint64_t> db_time(array_db.size(), data_period.start);
+            std::vector<Tick> ticks(array_db.size());
+            std::vector<Tick> ticks_next(array_db.size());
+            // начальная инициализация массивов
+            size_t index = 0;
+            for(auto &item : array_db) {
+                std::vector<Tick> temp = item->get_first_upper_array(db_time[index], 2);
+                ticks[index] = temp[0];
+                ticks_next[index] = temp[1];
+                if (ticks_next[index].empty()) {
+                    db_time[index] = data_period.stop;
+                } else {
+                    db_time[index] = ticks_next[index].timestamp + 1;
+                }
+                ++index;
+            } // for
+            while(true) {
+                // загрузили тики и обновлили время поиска следующего тика
+                index = 0;
+                for(auto &item : array_db) {
+                    if (db_time[index] == data_period.stop) {
+                        if (ticks[index].empty()) {
+                            ticks[index] = ticks_next[index];
+                        }
+                        ++index;
+                        continue;
+                    }
+                    if (ticks[index].empty()) {
+                        ticks[index] = ticks_next[index];
+                        ticks_next[index] = item->get_first_upper(db_time[index]);
+                        if (ticks_next[index].empty()) {
+                            db_time[index] = data_period.stop;
+                        } else {
+                            db_time[index] = ticks_next[index].timestamp + 1;
+                        }
+                    }
+                    ++index;
+                }
+
+                bool is_exit = true;
+                uint64_t min_next_timestamp = data_period.stop;
+                for (auto it : ticks_next) {
+                    if (it.timestamp != 0 && min_next_timestamp >= it.timestamp) {
+                        min_next_timestamp = it.timestamp;
+                        is_exit = false;
+                    }
+                }
+
+                bool is_exit2 = true;
+                while (true) {
+                    uint64_t min_timestamp = data_period.stop;
+                    size_t index_min = ticks.size() + 1;
+                    for (size_t i = 0; i < ticks.size(); ++i) {
+                        if (ticks[i].timestamp != 0 &&
+                            min_timestamp >= ticks[i].timestamp) {
+                            min_timestamp = ticks[i].timestamp;
+                            index_min = i;
+                            is_exit2 = false;
+                        }
+                    }
+
+                    if (index_min == (ticks.size() + 1)) break;
+                    if (ticks[index_min].timestamp > min_next_timestamp) break;
+                    callback(index_min, ticks[index_min]);
+                    ticks[index_min] = Tick();
+                }
+
+                if (is_exit && is_exit2) break;
+            }
+		}
+
+		enum TypesPrice {
+            USE_BID = 0,        /**< Использовать цену bid */
+            USE_ASK = 1,        /**< Использовать цену ask */
+            USE_AVERAGE = 2,    /**< Использовать среднюю цену */
+		};
+
+		enum TypesDirections {
+            DIR_ERROR = -2,
+            DIR_UNDEFINED = 0,
+            DIR_UP = 1,
+            DIR_DOWN = -1
+		};
+
+        /** \brief Получить направление цены (имитация бинарного опциона)
+         *
+         * \param type          Тип цены
+         * \param timestamp_ms  Время, от которого начинаем проверку направления
+         * \param expiration_ms Экспирация
+         * \param delay_ms      Задержка
+         * \param period_ms     Период дискретизации. Указать 0, если замер происходит в любую миллисекунду
+         * \return Вернет направление цены или ошибку
+         */
+		inline TypesDirections get_direction(
+                const TypesPrice type,
+                const uint64_t timestamp_ms,
+                const uint64_t expiration_ms,
+                const uint64_t delay_ms,
+                const uint64_t period_ms = 0) {
+            Tick tick_1 = get_first_lower(timestamp_ms);
+            if (tick_1.empty()) return TypesDirections::DIR_ERROR;
+            const uint64_t t1_delay = tick_1.server_timestamp + delay_ms;
+            const uint64_t t1 = period_ms == 0 ? t1_delay : (t1_delay - (t1_delay % period_ms) + period_ms);
+            const uint64_t t2 = t1 + expiration_ms;
+            Tick tick_2 = get_first_lower(t2, true);
+            if (tick_2.empty()) return TypesDirections::DIR_ERROR;
+            const double open = type == TypesPrice::USE_BID ? tick_1.bid : (type == TypesPrice::USE_ASK ? tick_1.ask : ((tick_1.bid + tick_1.ask)/2.0d));
+            const double close = type == TypesPrice::USE_BID ? tick_2.bid : (type == TypesPrice::USE_ASK ? tick_2.ask : ((tick_2.bid + tick_2.ask)/2.0d));
+            if (close > open) return TypesDirections::DIR_UP;
+            if (close < open) return TypesDirections::DIR_DOWN;
+            return TypesDirections::DIR_UNDEFINED;
+		}
+
 		inline void wait() noexcept {
             while (true) {
                 {
@@ -751,7 +1167,6 @@ namespace trading_db {
             return true;
 		};
 	};
-
 };
 
 #endif /* TRADING_TICK_DB_HPP */

@@ -29,6 +29,7 @@
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/xtime_cpp/src" />
+					<Add directory="../../include" />
 				</Compiler>
 				<Linker>
 					<Add option="-pg -lgmon" />
@@ -38,6 +39,7 @@
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/xtime_cpp/src" />
+					<Add directory="../../include" />
 				</Linker>
 			</Target>
 		</Build>
@@ -45,8 +47,9 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="../../include/tick-db.hpp" />
-		<Unit filename="../../include/utility/asyn-tasks.hpp" />
+		<Unit filename="../../include/trading-db/tick-db.hpp" />
+		<Unit filename="../../include/trading-db/utility/asyn-tasks.hpp" />
+		<Unit filename="../../include/trading-db/utility/print.hpp" />
 		<Unit filename="../../lib/sqlite-amalgamation-3340100/sqlite3.c">
 			<Option compilerVar="CC" />
 		</Unit>
