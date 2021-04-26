@@ -490,21 +490,22 @@ namespace trading_db {
             });
 		}
 
-		inline std::deque<Tick> get_first_lower_array_from_db(utility::SqliteStmt &stmt, const uint64_t timestamp_ms, const size_t length) {
-            std::deque<Tick> buffer;
+		template<class T>
+		inline T get_tick_array_from_db(utility::SqliteStmt &stmt, const uint64_t timestamp_ms, const size_t length) {
+            T buffer;
             int err = 0;
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
                     TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_reset return code " << err << std::endl;
-                    return std::deque<Tick>();
+                    return T();
                 }
                 if ((err = sqlite3_bind_int64(stmt.get(), 1, static_cast<sqlite3_int64>(timestamp_ms))) != SQLITE_OK) {
                     TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_bind_int64 return code " << err << std::endl;
-                    return std::deque<Tick>();
+                    return T();
                 }
                 if ((err = sqlite3_bind_int64(stmt.get(), 2, static_cast<sqlite3_int64>(length))) != SQLITE_OK) {
                     TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_bind_int64 return code " << err << std::endl;
-                    return std::deque<Tick>();
+                    return T();
                 }
                 err = sqlite3_step(stmt.get());
                 if(err == SQLITE_BUSY) {
@@ -518,7 +519,7 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     //TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
-                    return std::deque<Tick>();
+                    return T();
                 }
 
                 err = 0;
@@ -694,7 +695,7 @@ namespace trading_db {
         bool write(const Tick& new_tick) noexcept {
             // флаг блокировки 'is_block_write' записи имеет высокий приоритет
             if (is_block_write) return false;
-            reset_stop_counter();
+            reset_counter_autostop_recording();
             std::lock_guard<std::mutex> lock(write_buffer_mutex);
             // проверяем остановку записи
             if (is_stop_write) return false;
@@ -738,28 +739,22 @@ namespace trading_db {
             return true;
 		}
 
-		inline void set_wait_stop_time(const uint32_t standby_time) noexcept {
+        /** \brief Установить время автоматического завершения записи тиков
+         * \param standby_time Время автоматического завершения записи тиков
+         */
+		inline void set_timeout_autostop_recording(const uint32_t standby_time) noexcept {
             standby_time_end_ticks = standby_time;
 		}
 
-		inline void reset_stop_counter() noexcept {
+        /** \brief Сбросить счетчик автоматического завершения записи тиков
+         */
+		inline void reset_counter_autostop_recording() noexcept {
             const uint64_t temp = standby_time_end_ticks + xtime::get_timestamp();
             last_reset_timestamp = temp;
 		}
 
-		enum TypesPrice {
-            USE_BID = 0,        /**< Использовать цену bid */
-            USE_ASK = 1,        /**< Использовать цену ask */
-            USE_AVERAGE = 2,    /**< Использовать среднюю цену */
-		};
-
-		enum TypesDirections {
-            DIR_ERROR = -2,
-            DIR_UNDEFINED = 0,
-            DIR_UP = 1,
-            DIR_DOWN = -1
-		};
-
+        /** \brief Ожидание завершения записи тиков
+         */
 		inline void wait() noexcept {
             while (true) {
                 {
@@ -772,6 +767,10 @@ namespace trading_db {
             }
 		}
 
+        /** \brief Создать бэкап
+         * \param path  Путь к бэкапу базы данных
+         * \return Вернет true, если бэкап начался
+         */
 		bool backup(const std::string &path) {
             if (is_backup) return false;
             is_backup = true;
@@ -786,14 +785,101 @@ namespace trading_db {
             return true;
 		}
 
+        private:
+		// переменные для работы с get_first_upper
+		std::deque<Tick> first_upper_buffer_2;
+        xtime::period_t first_upper_period_2;
+		std::deque<Tick> first_upper_buffer_1;
+		xtime::period_t first_upper_period_1;
+		size_t first_upper_buffer_size = 10000;
+		//size_t first_upper_buffer_index = 0;
+
+        template<class T>
+		inline Tick get_first_upper(T &buffer, xtime::period_t &period, const uint64_t timestamp_ms, const bool use_server_time = false) {
+            if (buffer.empty() ||
+                timestamp_ms < period.start ||
+                timestamp_ms > period.stop) {
+
+                period.start = timestamp_ms;
+                buffer = get_first_upper_array<T>(timestamp_ms, first_upper_buffer_size, true);
+                if (buffer.empty()) period.stop = timestamp_ms;
+                else period.stop = use_server_time ? buffer.back().server_timestamp : buffer.back().timestamp;
+            }
+
+            if (!buffer.empty()) {
+                if (use_server_time) {
+                    auto it = std::lower_bound(
+                        buffer.begin(),
+                        buffer.end(),
+                        timestamp_ms,
+                        [](const Tick &lhs, const uint64_t &timestamp) {
+                        return lhs.server_timestamp < timestamp;
+                    });
+                    if (it == buffer.end()) return Tick();
+                    return *it;
+                } else {
+                    auto it = std::lower_bound(
+                        buffer.begin(),
+                        buffer.end(),
+                        timestamp_ms,
+                        [](const Tick &lhs, const uint64_t &timestamp) {
+                        return lhs.timestamp < timestamp;
+                    });
+                    if (it == buffer.end()) return Tick();
+                    return *it;
+                }
+            }
+            return Tick();
+		}
+
+		public:
+
+        /** \brief Получить первый ближайший тик выше указанной метки времени
+         * \param timestamp_ms      Метка времени
+         * \param use_server_time   Тип времени, если true, используется время сервера
+         * \return Тик, время которого равно или больше указанной метки времени
+         */
+		inline Tick get_first_upper(const uint64_t timestamp_ms, const bool use_server_time = false) {
+            if (use_server_time) {
+                return get_first_upper<std::deque<Tick>>(first_upper_buffer_2, first_upper_period_2, timestamp_ms, true);
+            } else {
+                return get_first_upper<std::deque<Tick>>(first_upper_buffer_1, first_upper_period_1, timestamp_ms, false);
+            }
+            return Tick();
+		}
+
+		/** \brief Получить массив ближайших тиков выше указанной метки времени
+         * \param timestamp_ms      Метка времени
+         * \param length            Длина массива
+         * \param use_server_time   Тип времени, если true, используется время сервера
+         * \return Массив тиков, время которых равно или больше указанной метки времени
+         */
+        template<class T>
+		inline T get_first_upper_array(const uint64_t timestamp_ms, const size_t length, const bool use_server_time = false) {
+            std::lock_guard<std::mutex> lock(stmt_mutex);
+            T temp;
+            if (use_server_time) {
+                temp = get_tick_array_from_db<T>(stmt_get_first_ticks_upper_2, timestamp_ms, 1);
+            } else {
+                temp = get_tick_array_from_db<T>(stmt_get_first_ticks_upper, timestamp_ms, 1);
+            }
+            if (temp.size() < length) temp.resize(length, Tick());
+            return std::move(temp);
+		}
+
+        /** \brief Получить первый тик, который меньше или равен указанной метки времени
+         * \param timestamp_ms      Метка времени, от которой ищем тик
+         * \param use_server_time   Использовать время сервера
+         * \return Вернет тик или пустой тик, если тик не найден
+         */
 		inline Tick get_first_lower(const uint64_t timestamp_ms, const bool use_server_time = false) {
             std::lock_guard<std::mutex> lock(stmt_mutex);
             std::deque<Tick> temp;
             if (use_server_time) {
-                temp = get_first_lower_array_from_db(stmt_get_first_ticks_lower_2, timestamp_ms, 1);
+                temp = get_tick_array_from_db<std::deque<Tick>>(stmt_get_first_ticks_lower_2, timestamp_ms, 1);
                 if (temp.empty()) return Tick();
             } else {
-                temp = get_first_lower_array_from_db(stmt_get_first_ticks_lower, timestamp_ms, 1);
+                temp = get_tick_array_from_db<std::deque<Tick>>(stmt_get_first_ticks_lower, timestamp_ms, 1);
                 if (temp.empty()) return Tick();
             }
             return temp[0];
@@ -808,13 +894,177 @@ namespace trading_db {
                 const char *query = "SELECT * FROM 'Ticks' WHERE timestamp <= :x ORDER BY timestamp DESC LIMIT :y";
                 stmt.init(this->sqlite_db, query);
             }
-            std::deque<Tick> temp = get_first_lower_array_from_db(stmt, timestamp_ms, 1);
+            std::deque<Tick> temp = get_tick_array_from_db<std::deque<Tick>>(stmt, timestamp_ms, 1);
             if (temp.empty()) return Tick();
             return temp[0];
 		}
 
-		bool set_symbol(const std::string& symbol) noexcept {
-            Note kv{"symbol", symbol};
+
+		/** \brief Бэктестинг
+         *
+         * Данный метод вызывает функцию обратного вызова для каждого тика за указанный период
+         * \param data_period   Период бэкстестинга, в секундах
+         * \param callback      Функция обратного вызова
+         */
+        void backtesting_witch_stop(
+                xtime::period_t data_period,
+                const std::function<void(const Tick &tick, const bool is_stop)> &callback) {
+            data_period.start *= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop *= xtime::MILLISECONDS_IN_SECOND;
+            xtime::timestamp_t last_timestamp = data_period.start;
+            xtime::timestamp_t end_timestamp = 0;
+            for(xtime::timestamp_t t = data_period.start; t <= data_period.stop; ++t) {
+                Tick first_tick = get_first_upper(t);
+                if (!first_tick.empty()) {
+                    t = last_timestamp = first_tick.timestamp;
+                    if (last_timestamp > end_timestamp || end_timestamp == 0) {
+                        Tick first_end = get_first_upper(t);
+                        if (!first_end.empty()) {
+                            end_timestamp = first_end.timestamp;
+                        } else {
+                            //?
+                        }
+                    }
+                    callback(first_tick, (last_timestamp == end_timestamp));
+                }
+            } // for t
+		}
+
+        /** \brief Бэктестинг
+         *
+         * Данный метод обрабатывает массив баз данных и вызывает функцию обратного вызова для каждого тика за указанный период
+         * \param array_db      Массив баз данных
+         * \param data_period   Период бэкстестинга, в секундах
+         * \param callback      Функция обратного вызова
+         */
+        template<class T>
+		static void backtesting(
+                T &array_db,
+                xtime::period_t data_period,
+                const std::function<void(
+                    const size_t index_db,
+                    const Tick &tick)> &callback) {
+            data_period.start *= xtime::MILLISECONDS_IN_SECOND;
+            data_period.stop *= xtime::MILLISECONDS_IN_SECOND;
+            std::deque<uint64_t> db_time(array_db.size(), data_period.start);
+            std::deque<Tick> ticks(array_db.size());
+            std::deque<Tick> ticks_next(array_db.size());
+            // начальная инициализация массивов
+            size_t index = 0;
+            for(auto &item : array_db) {
+                std::deque<Tick> temp = item->get_first_upper_array(db_time[index], 2, false);
+                ticks[index] = temp[0];
+                ticks_next[index] = temp[1];
+                if (ticks_next[index].empty()) {
+                    db_time[index] = data_period.stop;
+                } else {
+                    db_time[index] = ticks_next[index].timestamp + 1;
+                }
+                ++index;
+            } // for
+            while(true) {
+                // загрузили тики и обновлили время поиска следующего тика
+                index = 0;
+                for(auto &item : array_db) {
+                    if (db_time[index] == data_period.stop) {
+                        if (ticks[index].empty()) {
+                            ticks[index] = ticks_next[index];
+                        }
+                        ++index;
+                        continue;
+                    }
+                    if (ticks[index].empty()) {
+                        ticks[index] = ticks_next[index];
+                        ticks_next[index] = item->get_first_upper(db_time[index]);
+                        if (ticks_next[index].empty()) {
+                            db_time[index] = data_period.stop;
+                        } else {
+                            db_time[index] = ticks_next[index].timestamp + 1;
+                        }
+                    }
+                    ++index;
+                }
+
+                bool is_exit = true;
+                uint64_t min_next_timestamp = data_period.stop;
+                for (auto it : ticks_next) {
+                    if (it.timestamp != 0 && min_next_timestamp >= it.timestamp) {
+                        min_next_timestamp = it.timestamp;
+                        is_exit = false;
+                    }
+                }
+
+                bool is_exit2 = true;
+                while (true) {
+                    uint64_t min_timestamp = data_period.stop;
+                    size_t index_min = ticks.size() + 1;
+                    for (size_t i = 0; i < ticks.size(); ++i) {
+                        if (ticks[i].timestamp != 0 &&
+                            min_timestamp >= ticks[i].timestamp) {
+                            min_timestamp = ticks[i].timestamp;
+                            index_min = i;
+                            is_exit2 = false;
+                        }
+                    }
+
+                    if (index_min == (ticks.size() + 1)) break;
+                    if (ticks[index_min].timestamp > min_next_timestamp) break;
+                    callback(index_min, ticks[index_min]);
+                    ticks[index_min] = Tick();
+                }
+
+                if (is_exit && is_exit2) break;
+            }
+		}
+
+        enum TypesPrice {
+            USE_BID = 0,        /**< Использовать цену bid */
+            USE_ASK = 1,        /**< Использовать цену ask */
+            USE_AVERAGE = 2,    /**< Использовать среднюю цену */
+		};
+
+		enum TypesDirections {
+            DIR_ERROR = -2,     /**< Ошибка получения направления */
+            DIR_UNDEFINED = 0,  /**< Неопределенное направление */
+            DIR_UP = 1,         /**< Цена двигалась верх */
+            DIR_DOWN = -1       /**< Цена двигалась вниз */
+		};
+
+        /** \brief Получить направление цены (имитация бинарного опциона)
+         * \param type          Тип цены
+         * \param timestamp_ms  Время, от которого начинаем проверку направления
+         * \param expiration_ms Экспирация
+         * \param delay_ms      Задержка
+         * \param period_ms     Период дискретизации. Указать 0, если замер происходит в любую миллисекунду
+         * \return Вернет направление цены или ошибку
+         */
+		inline TypesDirections get_direction(
+                const TypesPrice type,
+                const uint64_t timestamp_ms,
+                const uint64_t expiration_ms,
+                const uint64_t delay_ms,
+                const uint64_t period_ms = 0) {
+            Tick tick_1 = get_first_lower(timestamp_ms);
+            if (tick_1.empty()) return TypesDirections::DIR_ERROR;
+            const uint64_t t1_delay = tick_1.server_timestamp + delay_ms;
+            const uint64_t t1 = period_ms == 0 ? t1_delay : (t1_delay - (t1_delay % period_ms) + period_ms);
+            const uint64_t t2 = t1 + expiration_ms;
+            Tick tick_2 = get_first_lower(t2, true);
+            if (tick_2.empty()) return TypesDirections::DIR_ERROR;
+            const double open = type == TypesPrice::USE_BID ? tick_1.bid : (type == TypesPrice::USE_ASK ? tick_1.ask : ((tick_1.bid + tick_1.ask)/2.0d));
+            const double close = type == TypesPrice::USE_BID ? tick_2.bid : (type == TypesPrice::USE_ASK ? tick_2.ask : ((tick_2.bid + tick_2.ask)/2.0d));
+            if (close > open) return TypesDirections::DIR_UP;
+            if (close < open) return TypesDirections::DIR_DOWN;
+            return TypesDirections::DIR_UNDEFINED;
+		}
+
+        /** \brief Установить заметку
+         * \param key   Ключ заметки
+         * \param value Значение заметки
+         * \return Вернет true в случае успешного завершения
+         */
+		bool set_note(const std::string& key, const std::string& value) noexcept {
+		    Note kv{key, value};
             while (true) {
                 std::lock_guard<std::mutex> lock(stmt_mutex);
                 if (replace(kv, sqlite_transaction, stmt_replace_note)) return true;
@@ -823,9 +1073,53 @@ namespace trading_db {
             return false;
 		}
 
+        /** \brief Получить заметку по ключу
+         * \param key   Ключ заметки
+         * \return Значение заметки
+         */
+		std::string get_note(const std::string& key) noexcept {
+			std::lock_guard<std::mutex> lock(stmt_mutex);
+            return get_note_from_db(stmt_get_note, key).value;
+		}
+
+		bool set_symbol(const std::string& symbol) noexcept {
+            return set_note("symbol", symbol);
+		}
+
 		std::string get_symbol() noexcept {
-            std::lock_guard<std::mutex> lock(stmt_mutex);
-            return get_note_from_db(stmt_get_note, "symbol").value;
+            return get_note("symbol");
+		}
+
+        bool set_digits(const uint32_t digits) noexcept {
+            return set_note("digits", std::to_string(digits));
+		}
+
+		uint32_t get_digits() noexcept {
+            return std::stoi(get_note("digits"));
+		}
+
+        bool set_server_name(const std::string &server_name) noexcept {
+            return set_note("server_name", server_name);
+		}
+
+		std::string get_server_name() noexcept {
+            return get_note("server_name");
+		}
+
+        bool set_hostname(const std::string& hostname) noexcept {
+            return set_note("hostname", hostname);
+		}
+
+		std::string get_hostname() noexcept {
+            return get_note("hostname");
+		}
+
+		bool set_comment(const std::string& comment) noexcept {
+            return set_note("comment", comment);
+		}
+
+		std::string get_comment() noexcept {
+            return get_note("comment");
 		}
 	};
 };
