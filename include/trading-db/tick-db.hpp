@@ -3,18 +3,17 @@
 #define TRADING_DB_TICK_DB_HPP
 
 #if SQLITE_THREADSAFE != 2
-#error "The project must be built for sqlite multithreading! Set the SQLITE_THREADSAFE=2"
+//#error "The project must be built for sqlite multithreading! Set the SQLITE_THREADSAFE=2"
 #endif
 
-#include "utility/asyn-tasks.hpp"
+#include "config.hpp"
+#include "utility/async-tasks.hpp"
 #include "utility/print.hpp"
 #include <sqlite_orm/sqlite_orm.h>
 #include <xtime.hpp>
 #include <mutex>
 #include <atomic>
 #include <future>
-
-#define TRADING_DB_TICK_DB_PRINT PrintThread{}
 
 namespace trading_db {
 
@@ -71,16 +70,18 @@ namespace trading_db {
     private:
         std::string db_file_name;
 
-        size_t wait_delay = 10;
-        size_t write_buffer_size = 100; /**< Размер буфера для записи */
+        const size_t wait_delay = 10;
+        const size_t wait_process_delay = 500;
+        size_t write_buffer_size = 1000;    /**< Размер буфера для записи */
         size_t write_buffer_index = 0;
 
-        AsynTasks asyn_tasks;
+        utility::AsyncTasks async_tasks;
 
         std::deque<Tick> write_buffer;
+        std::deque<EndTickStamp> write_end_tick_buffer;
         EndTickStamp write_end_tick_stamp;
         std::mutex write_buffer_mutex;
-        std::atomic<uint32_t> write_buffer_restart_size = ATOMIC_VAR_INIT(0);
+        uint64_t write_buffer_restart_size = 0;
 
         std::deque<Tick> read_buffer;
         std::deque<EndTickStamp> read_buffer_end_tick_stamp;
@@ -99,8 +100,10 @@ namespace trading_db {
 		std::atomic<bool> is_shutdown = ATOMIC_VAR_INIT(false);
         std::atomic<bool> is_stop = ATOMIC_VAR_INIT(false);
 
-        std::atomic<uint32_t> wait_stop_time = ATOMIC_VAR_INIT(60);
+        std::atomic<uint32_t> wait_stop_timer = ATOMIC_VAR_INIT(60);
         std::atomic<uint32_t> wait_stop_timestamp = ATOMIC_VAR_INIT(0);
+
+        std::mutex backup_mutex;
 
         /** \brief Получить размер буфера для записи
          */
@@ -112,16 +115,17 @@ namespace trading_db {
 		inline void create_protected(
                 const std::function<void()> &callback,
                 const std::function<void(const uint64_t counter)> &callback_error,
-                const uint64_t delay = 20) {
+                const uint64_t delay = 500) {
             uint64_t counter = 0;
             while (!is_shutdown) {
                 try {
+                    //std::lock_guard<std::mutex> lock(backup_mutex);
                     callback();
                     break;
                 } catch(...) {
                     ++counter;
                     if (callback_error != nullptr) callback_error(counter);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(wait_delay));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
                     continue;
                 }
             }
@@ -130,10 +134,11 @@ namespace trading_db {
 		inline void create_protected_transaction(
                 const std::function<void()> &callback,
                 const std::function<void(const uint64_t counter)> &callback_error,
-                const uint64_t delay = 20) {
+                const uint64_t delay = 500) {
             uint64_t counter = 0;
             while (!is_shutdown) {
                 try {
+                    //std::lock_guard<std::mutex> lock(backup_mutex);
                     storage.transaction([&, callback]() mutable {
                         callback();
                         return true;
@@ -142,7 +147,7 @@ namespace trading_db {
                 } catch(...) {
                     ++counter;
                     if (callback_error != nullptr) callback_error(counter);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(wait_delay));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
                     continue;
                 }
             }
@@ -246,118 +251,153 @@ namespace trading_db {
                     sqlite_orm::make_column("value", &Note::value)));
 		}
 
+		bool checkpoint_reusing_db()  {
+            //sqlite3* database = storage.get_connection();
+            bool retVal = true;
+            int  status;
+
+            const int kSQLiteCheckpointMode = SQLITE_CHECKPOINT_PASSIVE;
+
+            //status = storage.wal_checkpoint();//sqlite3_wal_checkpoint_v2(database, NULL, kSQLiteCheckpointMode, NULL, NULL);
+
+            if (status != SQLITE_OK) {
+                //printf("gbDB_Meta_PRAGMA_Journal_WAL_ReusingDB: [ERR] Checkpoint failed, msg: %s ... status: %d\n", sqlite3_errmsg(database), status);
+                printf("gbDB_Meta_PRAGMA_Journal_WAL_ReusingDB: [ERR] Checkpoint failed, status: %d\n", status);
+                uint32_t        currentSleepMS  = 0;
+                const uint32_t kSleepIntervalMS = 100;                      // 100ms
+                const uint32_t kSleepIntervalUS = kSleepIntervalMS * 1000;  // 100ms -> us
+                const uint32_t kMaxSleepMS      = 60 * 1000;                // 60s   -> ms
+
+
+                while (status != SQLITE_OK)
+                {
+                    if (          (status != SQLITE_BUSY
+                                && status != SQLITE_LOCKED)
+                        || currentSleepMS >= kMaxSleepMS)
+                    {
+                        break;
+                    }//if
+
+                    //status = sqlite3_wal_checkpoint_v2(database, NULL, kSQLiteCheckpointMode, NULL, NULL);
+                    //status = storage.wal_checkpoint();
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(kSleepIntervalUS));
+                    currentSleepMS += kSleepIntervalMS;
+                }//while
+
+                if (currentSleepMS >= kMaxSleepMS)
+                {
+                    printf("gbDB_Meta_PRAGMA_Journal_WAL_ReusingDB: [ERR] Timeout while DB was busy.\n");
+                }//if
+
+                if (status != SQLITE_OK)
+                {
+                    printf("gbDB_Meta_PRAGMA_Journal_WAL_ReusingDB: [ERR] Checkpoint failed,... status: %d\n", status);
+                    retVal = false;;
+                }//if
+            }//if
+
+            return retVal;
+        }
+
         /** \brief Инициализация объектов класса
          */
 		inline void init_other() noexcept {
+            using namespace sqlite_orm;
             /* если вы хотите получить доступ к хранилищу из разных потоков,
-             * вы должны вызвать его open_foreverсразу после создания хранилища,
+             * вы должны вызвать его open_forever сразу после создания хранилища,
              * потому что хранилище может создавать разные соединения
              * в результате гонок данных внутри хранилища
              * https://github.com/fnc12/sqlite_orm/issues/163
              */
-            storage.open_forever();
+            {
+            std::lock_guard<std::mutex> lock(backup_mutex);
             storage.sync_schema();
-            storage.busy_timeout(1000);
+            storage.open_forever();
+            //storage.pragma.journal_mode(journal_mode::WAL);
+            storage.busy_timeout(0);
+            }
 
-            /* запускаем асинхронную задачу
-             * в данном потоке мы будем делать запись в БД
-             */
-            asyn_tasks.creat_task([&]() {
+            //sqlite3_enable_shared_cache(1);
+
+            async_tasks.create_task([&]() {
+                TRADING_DB_TICK_DB_PRINT << db_file_name << "---Storage 1" << std::endl;
+                Storage writing_storage(init_storage(db_file_name));
+                {
+                    std::lock_guard<std::mutex> lock(backup_mutex);
+                    TRADING_DB_TICK_DB_PRINT << db_file_name << "---Storage 2" << std::endl;
+                    writing_storage.sync_schema();
+                    //writing_storage.pragma.journal_mode(journal_mode::WAL);
+                    TRADING_DB_TICK_DB_PRINT << db_file_name << "---Storage 3" << std::endl;
+                    writing_storage.open_forever();
+                    writing_storage.busy_timeout(0);
+                    TRADING_DB_TICK_DB_PRINT << db_file_name << "---Storage 4" << std::endl;
+                }
+
                 uint64_t stop_timestamp = 0;
                 bool is_stop_timestamp = false;
                 while (true) {
                     bool is_write_buffer = false;
                     bool is_write_end_tick_stamp = false;
+                    // данные для записи
+                    std::deque<Tick> transaction_tick_buffer;
+                    std::deque<EndTickStamp> transaction_end_tick_buffer;
 
-                    /* запоминаем данные для записи */
-                    std::deque<Tick> transaction_buffer;
+                    // запоминаем данные для записи
                     {
                         std::lock_guard<std::mutex> lock(write_buffer_mutex);
                         if (xtime::get_timestamp() > wait_stop_timestamp) is_stop_write = true;
-                        if (is_restart_write) {
-                            /* если был рестарт, копируем только часть данных */
-                            if (write_buffer_restart_size > 0) {
-                                transaction_buffer.resize(write_buffer_restart_size);
-                                transaction_buffer.assign(write_buffer.begin(), write_buffer.begin() + write_buffer_restart_size);
-
-                                stop_timestamp = transaction_buffer.back().timestamp;
-                                write_end_tick_stamp.timestamp = stop_timestamp;
-                                is_stop_timestamp = true;
-
-                                is_write_buffer = true;
-                                is_write_end_tick_stamp = true;
-                            }
-                            is_restart_write = false;
-                        } else
                         if (write_buffer.size() > write_buffer_size || is_stop_write) {
                             if (!write_buffer.empty()) {
-                                transaction_buffer.resize(write_buffer.size());
-                                transaction_buffer.assign(write_buffer.begin(), write_buffer.end());
-
-                                stop_timestamp = transaction_buffer.back().timestamp;
-                                write_end_tick_stamp.timestamp = stop_timestamp;
-                                is_stop_timestamp = true;
-
-                                is_write_buffer = true;
+                                transaction_tick_buffer.resize(write_buffer.size());
+                                transaction_tick_buffer.assign(write_buffer.begin(), write_buffer.end());
                             }
-                            if (is_stop_write) {
-                                if (is_stop_timestamp) {
-                                    is_write_end_tick_stamp = true;
+                            if (!write_end_tick_buffer.empty()) {
+                                transaction_end_tick_buffer.resize(write_end_tick_buffer.size());
+                                transaction_end_tick_buffer.assign(write_end_tick_buffer.begin(), write_end_tick_buffer.end());
+                            }
+                        }
+                    }
+
+                    if (!transaction_tick_buffer.empty() || !transaction_end_tick_buffer.empty()) {
+                        create_protected([&](){
+                            std::lock_guard<std::mutex> lock(backup_mutex);
+                            writing_storage.begin_transaction();
+                            if (!transaction_tick_buffer.empty()) {
+                                for (const Tick& t : transaction_tick_buffer) {
+                                    writing_storage.replace(t);
                                 }
-                                is_recording = false;
                             }
-                            is_stop_write = false;
-                        }
-                    }
-
-                    /* записываем данные в БД */
-                    if (is_write_buffer) {
-                        std::cout << db_file_name << " ---4.1" << std::endl;
-                        create_protected_transaction([&, transaction_buffer](){
-                            for (const Tick& t : transaction_buffer) {
-                                storage.replace(t);
+                            if (!transaction_end_tick_buffer.empty()) {
+                                for (const EndTickStamp& t : transaction_end_tick_buffer) {
+                                    writing_storage.replace(t);
+                                }
                             }
+                            writing_storage.commit();
                         },[&](const uint64_t error_counter){
                             TRADING_DB_TICK_DB_PRINT
                                 << "trading-db: " << db_file_name
                                 << " sqlite transaction error! Line " << __LINE__ << ", counter = "
                                 << error_counter << std::endl;
                         });
-                    }
-                    if (is_write_end_tick_stamp) {
-                        create_protected_transaction([&, stop_timestamp](){
-                            EndTickStamp end_tick_stamp(stop_timestamp);
-                            storage.replace(end_tick_stamp);
-                        },[&](const uint64_t error_counter){
-                            TRADING_DB_TICK_DB_PRINT
-                                << "trading-db: " << db_file_name
-                                << " sqlite transaction error! Line " << __LINE__ << ", counter = "
-                                << error_counter << std::endl;
-                        });
-                        is_stop_timestamp = false;
-                    }
-
-                    if (is_write_buffer) {
-                        std::lock_guard<std::mutex> lock(write_buffer_mutex);
-                        /* очищаем буфер с котировками */
-                        if (!write_buffer.empty() && !transaction_buffer.empty()) {
-                            write_buffer.erase(write_buffer.begin(), write_buffer.begin() + transaction_buffer.size());
-                        }
                     }
 
                     {
                         std::lock_guard<std::mutex> lock(write_buffer_mutex);
-                        if (is_stop_timestamp || !write_buffer.empty()) {
-                            is_writing = true;
-                        } else {
-                            is_writing = false;
-                            if (is_shutdown) break;
+                        /* очищаем буфер с котировками */
+                        if (!write_buffer.empty() && !transaction_tick_buffer.empty()) {
+                            write_buffer.erase(write_buffer.begin(), write_buffer.begin() + transaction_tick_buffer.size());
                         }
+                        if (!write_end_tick_buffer.empty() && !transaction_end_tick_buffer.empty()) {
+                            write_end_tick_buffer.erase(write_end_tick_buffer.begin(), write_end_tick_buffer.begin() + transaction_end_tick_buffer.size());
+                        }
+                        if (write_buffer.empty()) is_writing = false;
                     }
+                    if (is_shutdown) break;
                     std::this_thread::sleep_for(std::chrono::milliseconds(wait_delay));
                 }
-                is_writing = false;
                 is_stop = true;
+                TRADING_DB_TICK_DB_PRINT << db_file_name << " stop" << std::endl;
             });
 		}
 
@@ -396,7 +436,7 @@ namespace trading_db {
                     TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name
                     << " sqlite get_all error! Line " << __LINE__ << ", counter = "
                     << error_counter << std::endl;
-                });
+                },500);
 
                 create_protected([&](){
                     end_element = storage.get_all<Tick, std::deque<Tick>>(
@@ -407,7 +447,7 @@ namespace trading_db {
                     TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name
                         << " sqlite get_all error! Line " << __LINE__ << ", counter = "
                         << error_counter << std::endl;
-                });
+                },500);
 
                 if (!beg_element.empty()) buffer.push_front(beg_element.back());
                 if (!end_element.empty()) buffer.push_back(end_element.front());
@@ -456,24 +496,24 @@ namespace trading_db {
 		}
 
 		~TickDb() {
-            /* ждем завершения бэкапа */
+            // ждем завершения бэкапа
             while(is_backup) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(wait_delay));
             }
 
             is_block_write = true;
-            /* ставим флаг остановки записи */
+            // ставим флаг остановки записи
             {
                 std::lock_guard<std::mutex> lock(write_buffer_mutex);
                 is_stop_write = true;
             }
             wait();
             is_shutdown = true;
-            /* ждем завершение потоков */
+            // ждем завершение потоков
             while(!is_stop) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(wait_delay));
             }
-            asyn_tasks.clear();
+            async_tasks.clear();
 		}
 
         /** \brief Записать новый тик
@@ -500,14 +540,11 @@ namespace trading_db {
             } else
             if (new_tick.timestamp == write_buffer.back().timestamp) {
                 write_buffer.back() = new_tick;
-            } else
-            if (!is_restart_write) {
-                /* останавливаем запись и возобновляем вновь */
-                write_buffer_restart_size = write_buffer.size();
-                write_end_tick_stamp.timestamp = write_buffer.back().timestamp;
+            } else {
+                write_end_tick_buffer.push_back(write_end_tick_stamp.timestamp);
                 write_buffer.push_back(new_tick);
-                is_restart_write = true;
             }
+            write_end_tick_stamp.timestamp = new_tick.timestamp;
 			return true;
 		}
 
@@ -529,23 +566,23 @@ namespace trading_db {
             std::lock_guard<std::mutex> lock(write_buffer_mutex);
             if (!is_recording) return false;
             if (is_stop_write) return false;
+            write_end_tick_buffer.push_back(write_end_tick_stamp.timestamp);
             is_stop_write = true;
-            write_end_tick_stamp.timestamp = write_buffer.back().timestamp;
             return true;
 		}
 
 		inline void set_wait_stop_time(const uint32_t wait_time) {
-            wait_stop_time = wait_time;
+            wait_stop_timer = wait_time;
 		}
 
 		inline void reset_stop_counter() {
-            const uint64_t temp = wait_stop_time + xtime::get_timestamp();
+            const uint64_t temp = wait_stop_timer + xtime::get_timestamp();
             wait_stop_timestamp = temp;
 		}
 
 		Tick get(const uint64_t timestamp_ms, const bool db_only = false) noexcept {
             if (!db_only) {
-                /* ищем данные в буфере */
+                // ищем данные в буфере
                 int state = 0;
                 std::deque<Tick> buffer_1;
                 std::deque<Tick> buffer_2;
@@ -599,7 +636,7 @@ namespace trading_db {
                 };
             } // if
 
-            /* далее идет работа с базой данных, ведь буфер не содержит искомых данных */
+            // далее идет работа с базой данных, ведь буфер не содержит искомых данных
             {
                 std::lock_guard<std::mutex> lock(read_buffer_mutex);
                 if (read_buffer.empty() ||
@@ -643,6 +680,7 @@ namespace trading_db {
 		}
 
 		private:
+		// переменные для работы с get_first_upper
 		std::vector<Tick> first_upper_buffer_2;
         xtime::period_t first_upper_period_2;
 		std::vector<Tick> first_upper_buffer_1;
@@ -760,17 +798,28 @@ namespace trading_db {
 		inline Tick get_first_lower(const uint64_t timestamp_ms, const bool use_server_time = false) {
             using namespace sqlite_orm;
             std::vector<Tick> first_tick;
-            if (use_server_time) {
-                first_tick = storage.get_all<Tick>(
-                        where(c(&Tick::server_timestamp) <= timestamp_ms),
-                        order_by(&Tick::server_timestamp).desc(),
-                        limit(1));
-            } else {
-                first_tick = storage.get_all<Tick>(
-                        where(c(&Tick::timestamp) <= timestamp_ms),
-                        order_by(&Tick::timestamp).desc(),
-                        limit(1));
-            }
+            create_protected([&](){
+                if (use_server_time) {
+                    std::lock_guard<std::mutex> lock(backup_mutex);
+                    first_tick = storage.get_all<Tick>(
+                            where(c(&Tick::server_timestamp) <= timestamp_ms),
+                            order_by(&Tick::server_timestamp).desc(),
+                            limit(1));
+                } else {
+                    std::lock_guard<std::mutex> lock(backup_mutex);
+                    TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name << " get_first_lower" << std::endl;
+                    first_tick = storage.get_all<Tick>(
+                            where(c(&Tick::timestamp) <= timestamp_ms),
+                            order_by(&Tick::timestamp).desc(),
+                            limit(1));
+                    TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name << " get_first_lower end" << std::endl;
+                }
+            },[&](const uint64_t error_counter){
+                TRADING_DB_TICK_DB_PRINT
+                                << "trading-db: " << db_file_name
+                                << " sqlite get_all error! Line " << __LINE__ << ", counter = "
+                                << error_counter << std::endl;
+            });
             return first_tick.empty() ? Tick() : first_tick[0];
 		}
 
@@ -1048,8 +1097,8 @@ namespace trading_db {
 		}
 
 		void set_symbol(const std::string& symbol) noexcept {
-            Note kv{"symbol", symbol};
-            create_protected_transaction([&, kv](){
+            create_protected_transaction([&, symbol](){
+                Note kv{"symbol", symbol};
                 storage.replace(kv);
             },[&](const uint64_t error_counter){ TRADING_DB_TICK_DB_PRINT << "trading-db: sqlite transaction error! Line " << __LINE__ << ", counter = " << error_counter << std::endl; });
 		}
@@ -1153,17 +1202,38 @@ namespace trading_db {
 		bool backup(const std::string &backup_file_name) {
             if (is_backup) return false;
             is_backup = true;
-            asyn_tasks.creat_task([&, backup_file_name]() {
+            async_tasks.create_task([&, backup_file_name]() {
+                auto backup = storage.make_backup_to(backup_file_name);
                 create_protected([&, backup_file_name](){
-                    storage.backup_to(backup_file_name);
+                    //std::lock_guard<std::mutex> lock(backup_mutex);
+                    //TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name << " backup " << std::endl;
+                    //storage.backup_to(backup_file_name);
+                    //
+                    TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name << " backup " << std::endl;
+                    do {
+                        //std::lock_guard<std::mutex> lock(backup_mutex);
+                        backup.step(1);
+                    } while(backup.remaining() > 0);
+                    TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name << " backup end" << std::endl;
                 },[&, backup_file_name](const uint64_t error_counter){
                     TRADING_DB_TICK_DB_PRINT << "trading-db: " << db_file_name
                         << " sqlite backup " << backup_file_name
                         << "error! Line " << __LINE__ << ", Counter = "
                         << error_counter << std::endl;
-                });
+                },wait_process_delay);
                 is_backup = false;
             });
+
+            /*
+            async_tasks.create_task([&]() {
+                create_protected([&](){
+                    std::lock_guard<std::mutex> lock(backup_mutex);
+                },[&](const uint64_t error_counter){
+
+                },wait_process_delay);
+                is_backup = false;
+            });
+            */
             return true;
 		};
 	};

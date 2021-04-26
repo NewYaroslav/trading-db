@@ -1,6 +1,6 @@
 #pragma once
-#ifndef TRADING_DB_ASYN_TASKS_HPP_INCLUDED
-#define TRADING_DB_ASYN_TASKS_HPP_INCLUDED
+#ifndef TRADING_DB_ASYN_CTASKS_HPP_INCLUDED
+#define TRADING_DB_ASYNC_TASKS_HPP_INCLUDED
 
 #include <thread>
 #include <atomic>
@@ -9,10 +9,10 @@
 #include <deque>
 
 namespace trading_db {
-
+    namespace utility {
         /** \brief Класс для выполнений асинхронных задач
          */
-        class AsynTasks {
+        class AsyncTasks {
         private:
             std::mutex futures_mutex;
             std::deque<std::future<void>> futures;
@@ -45,7 +45,7 @@ namespace trading_db {
             /** \brief Создать задачу
              * \param callback Функция с задачей, которую необходимо исполнить асинхронно
              */
-            void creat_task(const std::function<void()> &callback) noexcept {
+            void create_task(const std::function<void()> &callback) noexcept {
                 {
                     std::lock_guard<std::mutex> lock(futures_mutex);
                     futures.resize(futures.size() + 1);
@@ -60,9 +60,21 @@ namespace trading_db {
                 return is_shutdown;
             };
 
-            AsynTasks() noexcept {};
+            inline void wait() {
+                std::lock_guard<std::mutex> lock(futures_mutex);
+                for(size_t i = 0; i < futures.size(); ++i) {
+                    if(futures[i].valid()) {
+                        try {
+                            futures[i].wait();
+                            futures[i].get();
+                        } catch(...) {}
+                    }
+                }
+            }
 
-            ~AsynTasks() noexcept {
+            AsyncTasks() noexcept {};
+
+            ~AsyncTasks() noexcept {
                 is_shutdown = true;
                 std::lock_guard<std::mutex> lock(futures_mutex);
                 for(size_t i = 0; i < futures.size(); ++i) {
@@ -73,9 +85,10 @@ namespace trading_db {
                         } catch(...) {}
                     }
                 }
-            } // ~AsynTasks()
+            } // ~AsyncTasks()
 
-        }; // AsynTasks
-};
+        }; // AsyncTasks
+    }; // utility
+}; // trading_db
 
 #endif // TRADING_DB_ASYN_TASKS_HPP_INCLUDED
