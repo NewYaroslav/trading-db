@@ -188,11 +188,11 @@ namespace trading_db {
         bool replace(Note &item, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) {
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
-            if (sqlite3_bind_text(stmt.get(), 1, item.key.c_str(), item.key.size(), SQLITE_TRANSIENT) != SQLITE_OK) {
+            if (sqlite3_bind_text(stmt.get(), 1, item.key.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
                 transaction.rollback();
                 return false;
             }
-            if (sqlite3_bind_text(stmt.get(), 2, item.value.c_str(), item.key.size(), SQLITE_TRANSIENT) != SQLITE_OK) {
+            if (sqlite3_bind_text(stmt.get(), 2, item.value.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
                 transaction.rollback();
                 return false;
             }
@@ -432,17 +432,21 @@ namespace trading_db {
                         // запоминаем данные для записи
                         std::lock_guard<std::mutex> lock(write_buffer_mutex);
                         if (xtime::get_timestamp() > last_reset_timestamp && is_recording) {
-                            if (last_tick_timestamp != 0) end_tick_stamp_buffer.push_back(last_tick_timestamp);
                             is_stop_write = true;
                         }
                         if (write_tick_buffer.size() > write_buffer_size_trigger || is_stop_write) {
                             if (!write_tick_buffer.empty()) {
-                                last_tick_timestamp = write_tick_buffer.back().timestamp;
                                 const size_t buffer_size = std::min(write_tick_buffer.size(), max_buffer_size_commit);
                                 tick_buffer.resize(buffer_size);
                                 tick_buffer.assign(
                                     write_tick_buffer.begin(),
                                     write_tick_buffer.begin() + buffer_size);
+                                last_tick_timestamp = write_tick_buffer[buffer_size - 1].timestamp;
+                            }
+                            if (is_stop_write) {
+                                if (last_tick_timestamp != 0) write_end_tick_stamp_buffer.push_back(last_tick_timestamp);
+                                is_recording = false;
+                                is_stop_write = false;
                             }
                             if (!write_end_tick_stamp_buffer.empty()) {
                                 const size_t buffer_size = std::min(write_end_tick_stamp_buffer.size(), max_buffer_size_commit);
@@ -451,10 +455,6 @@ namespace trading_db {
                                     write_end_tick_stamp_buffer.begin(),
                                     write_end_tick_stamp_buffer.begin() + buffer_size);
                             }
-                            if (is_stop_write) {
-                                is_recording = false;
-                            }
-                            is_stop_write = false;
                         }
                     }
 
@@ -566,7 +566,7 @@ namespace trading_db {
                     TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_reset return code " << err << std::endl;
                     return Note();
                 }
-                if (sqlite3_bind_text(stmt.get(), 1, key.c_str(), key.size(), SQLITE_TRANSIENT) != SQLITE_OK) {
+                if (sqlite3_bind_text(stmt.get(), 1, key.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
                     TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_reset return code " << err << std::endl;
                     return Note();
                 }
@@ -675,6 +675,9 @@ namespace trading_db {
             {
                 std::lock_guard<std::mutex> lock(write_buffer_mutex);
                 is_stop_write = true;
+            }
+            while (is_stop_write) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(wait_delay));
             }
             wait();
             is_shutdown = true;
