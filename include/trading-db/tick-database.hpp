@@ -69,6 +69,8 @@ namespace trading_db {
         utility::SqliteStmt stmt_get_first_end_tick_upper;
         utility::SqliteStmt stmt_replace_note;
         utility::SqliteStmt stmt_get_note;
+        utility::SqliteStmt stmt_get_max;
+        utility::SqliteStmt stmt_get_min;
 
         std::mutex stmt_mutex;
 
@@ -311,6 +313,8 @@ namespace trading_db {
 
                 stmt_replace_note.init(this->sqlite_db, "INSERT OR REPLACE INTO 'Note' (key, value) VALUES (?, ?)");
                 stmt_get_note.init(this->sqlite_db, "SELECT * FROM 'Note' WHERE key == :x");
+                stmt_get_min.init(this->sqlite_db, "SELECT min(timestamp) FROM 'Ticks'");
+                stmt_get_max.init(this->sqlite_db, "SELECT max(timestamp) FROM 'Ticks'");
             }
             return true;
         }
@@ -609,6 +613,52 @@ namespace trading_db {
             return std::move(note);
 		}
 
+		inline uint64_t get_min_max_from_db(utility::SqliteStmt &stmt) {
+            uint64_t timestamp = 0;
+            int err = 0;
+            while (true) {
+                if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
+                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_reset return code " << err << std::endl;
+                    return timestamp;
+                }
+                err = sqlite3_step(stmt.get());
+                if(err == SQLITE_BUSY) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    //TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                } else
+                if (err != SQLITE_ROW) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    //TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
+                    return timestamp;
+                }
+
+                timestamp = (uint64_t)sqlite3_column_int64(stmt.get(),0);
+                err = sqlite3_step(stmt.get());
+                if (err == SQLITE_ROW) {
+                    break;
+                } else
+                if(err == SQLITE_DONE) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    break;
+                } else
+                if(err == SQLITE_BUSY) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return SQLITE_BUSY" << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    timestamp = 0;
+                    continue;
+                }
+                break;
+            }
+            return timestamp;
+		}
+
 		bool backup_form_db(const std::string &path, sqlite3 *source_connection) {
             sqlite3 *dest_connection = nullptr;
 
@@ -862,9 +912,9 @@ namespace trading_db {
             std::lock_guard<std::mutex> lock(stmt_mutex);
             T temp;
             if (use_server_time) {
-                temp = get_tick_array_from_db<T>(stmt_get_first_ticks_upper_2, timestamp_ms, 1);
+                temp = get_tick_array_from_db<T>(stmt_get_first_ticks_upper_2, timestamp_ms, length);
             } else {
-                temp = get_tick_array_from_db<T>(stmt_get_first_ticks_upper, timestamp_ms, 1);
+                temp = get_tick_array_from_db<T>(stmt_get_first_ticks_upper, timestamp_ms, length);
             }
             if (temp.size() < length) temp.resize(length, Tick());
             return std::move(temp);
@@ -902,6 +952,15 @@ namespace trading_db {
             return temp[0];
 		}
 
+		xtime::period_t get_data_period() {
+            std::lock_guard<std::mutex> lock(stmt_mutex);
+            xtime::period_t p;
+            p.start = get_min_max_from_db(stmt_get_min);
+            p.stop = get_min_max_from_db(stmt_get_max);
+            p.start /= 1000;
+            p.stop /= 1000;
+            return p;
+		}
 
 		/** \brief Бэктестинг
          *
@@ -955,7 +1014,7 @@ namespace trading_db {
             // начальная инициализация массивов
             size_t index = 0;
             for(auto &item : array_db) {
-                std::deque<Tick> temp = item->get_first_upper_array(db_time[index], 2, false);
+                std::deque<Tick> temp = item->template get_first_upper_array<std::deque<Tick>>(db_time[index], 2, false);
                 ticks[index] = temp[0];
                 ticks_next[index] = temp[1];
                 if (ticks_next[index].empty()) {
