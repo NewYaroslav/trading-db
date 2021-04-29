@@ -1110,6 +1110,7 @@ namespace trading_db {
             if (tick_1.empty()) return TypesDirections::DIR_ERROR;
             const uint64_t t1_delay = tick_1.server_timestamp + delay_ms;
             const uint64_t t1 = period_ms == 0 ? t1_delay : (t1_delay - (t1_delay % period_ms) + period_ms);
+            tick_1 = get_first_lower(t1, true);
             const uint64_t t2 = t1 + expiration_ms;
             Tick tick_2 = get_first_lower(t2, true);
             if (tick_2.empty()) return TypesDirections::DIR_ERROR;
