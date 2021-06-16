@@ -10,6 +10,7 @@
 #include "utility/sqlite-func.hpp"
 #include "utility/async-tasks.hpp"
 #include "utility/print.hpp"
+#include "utility/files.hpp"
 #include <xtime.hpp>
 #include <mutex>
 #include <atomic>
@@ -97,6 +98,7 @@ namespace trading_db {
         }
 
         bool open_db(sqlite3 *&sqlite_db_ptr, const std::string &db_name, const bool readonly = false) {
+            utility::create_directory(db_name, true);
             // открываем и возможно еще создаем таблицу
             int flags = readonly ?
                 (SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :

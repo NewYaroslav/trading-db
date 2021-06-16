@@ -4,7 +4,7 @@
 
 int main() {
     std::cout << "Hello world!" << std::endl;
-    const std::string path("test_storage.db");
+    const std::string path("storage/test_storage.db");
     {
         trading_db::KeyValueDatabase kvdb(path);
 
