@@ -96,7 +96,6 @@ namespace trading_db {
             if(sqlite3_exec(sqlite_db_ptr, sql_statement.c_str(), nullptr, nullptr, &err) != SQLITE_OK) {
                 TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: " << err << std::endl;
                 sqlite3_free(err);
-                sqlite_db_ptr = nullptr;
                 return false;
             }
             return true;
@@ -776,7 +775,7 @@ namespace trading_db {
             return true;
 		}
 
-        private:
+    private:
 		// переменные для работы с get_first_upper
 		std::deque<Tick> first_upper_buffer_2;
         xtime::period_t first_upper_period_2;

@@ -136,6 +136,63 @@ namespace trading_db {
             }
             return true;
         }
+
+        bool sqlite_exec(sqlite3 *sqlite_db_ptr, const std::string &sql_statement) {
+            char *err = nullptr;
+            if(sqlite3_exec(sqlite_db_ptr, sql_statement.c_str(), nullptr, nullptr, &err) != SQLITE_OK) {
+                TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: " << err << std::endl;
+                sqlite3_free(err);
+                return false;
+            }
+            return true;
+        }
+
+        bool backup_form_db(const std::string &path, sqlite3 *source_connection) {
+            sqlite3 *dest_connection = nullptr;
+
+            int flags = (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX);
+            if (sqlite3_open_v2(path.c_str(), &dest_connection, flags, nullptr) != SQLITE_OK) {
+                TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: " << sqlite3_errmsg(dest_connection) << ", db name " << path << std::endl;
+                sqlite3_close_v2(dest_connection);
+                dest_connection = nullptr;
+                return false;
+            }
+
+            sqlite3_backup *backup_db = sqlite3_backup_init(dest_connection, "main", source_connection, "main");
+            if (!backup_db) {
+                sqlite3_close_v2(dest_connection);
+                return false;
+            }
+
+            while (true) {
+                int err = sqlite3_backup_step(backup_db, -1);
+                bool is_break = false;
+                switch(err) {
+                case SQLITE_DONE:
+                    //continue;
+                    is_break = true;
+                    break;
+                case SQLITE_OK:
+                case SQLITE_BUSY:
+                case SQLITE_LOCKED:
+                    //TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_backup_step return code " << err << std::endl;
+                    break;
+                default:
+                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_backup_step return code " << err << std::endl;
+                    is_break = true;
+                    break;
+                }
+                if (is_break) break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            }
+
+            if (sqlite3_backup_finish(backup_db) != SQLITE_OK) {
+                sqlite3_close_v2(dest_connection);
+                return false;
+            }
+            sqlite3_close_v2(dest_connection);
+            return true;
+		}
     }; // utility
 }; // trading_db
 
