@@ -69,6 +69,8 @@ namespace trading_db {
         utility::SqliteStmt stmt_get_first_end_tick_upper;
         utility::SqliteStmt stmt_replace_note;
         utility::SqliteStmt stmt_get_note;
+		utility::SqliteStmt stmt_get_max;
+        utility::SqliteStmt stmt_get_min;
 
         std::mutex stmt_mutex;
 
@@ -298,6 +300,8 @@ namespace trading_db {
 
                 stmt_replace_note.init(this->sqlite_db, "INSERT OR REPLACE INTO 'Note' (key, value) VALUES (?, ?)");
                 stmt_get_note.init(this->sqlite_db, "SELECT * FROM 'Note' WHERE key == :x");
+                stmt_get_min.init(this->sqlite_db, "SELECT min(timestamp) FROM 'Ticks'");
+                stmt_get_max.init(this->sqlite_db, "SELECT max(timestamp) FROM 'Ticks'");
             }
             return true;
         }
@@ -889,6 +893,18 @@ namespace trading_db {
             return temp[0];
 		}
 
+        /** \brief Получить период данных, имеющихся в БД
+         * \return Вернет структуру, содержащую даты начала и конца данных тиков
+         */
+		xtime::period_t get_data_period() {
+            std::lock_guard<std::mutex> lock(stmt_mutex);
+            xtime::period_t p;
+            p.start = get_min_max_from_db(stmt_get_min);
+            p.stop = get_min_max_from_db(stmt_get_max);
+            p.start /= 1000;
+            p.stop /= 1000;
+            return p;
+		}
 
 		/** \brief Бэктестинг
          *
@@ -920,7 +936,7 @@ namespace trading_db {
             } // for t
 		}
 
-        /** \brief Бэктестинг
+		/** \brief Бэктестинг
          *
          * Данный метод обрабатывает массив баз данных и вызывает функцию обратного вызова для каждого тика за указанный период
          * \param array_db      Массив баз данных
@@ -936,75 +952,50 @@ namespace trading_db {
                     const Tick &tick)> &callback) {
             data_period.start *= xtime::MILLISECONDS_IN_SECOND;
             data_period.stop *= xtime::MILLISECONDS_IN_SECOND;
-            std::deque<uint64_t> db_time(array_db.size(), data_period.start);
-            std::deque<Tick> ticks(array_db.size());
-            std::deque<Tick> ticks_next(array_db.size());
+
+            const size_t buffer_size = 20000;
+            const size_t db_count = array_db.size();
+
+            std::deque<uint64_t> db_time(db_count, data_period.start); // время следующего тика
+            std::deque<std::deque<Tick>> buffer(db_count); // массив тиков для всех БД
+            std::deque<uint64_t> buffer_index(db_count); // индексы тиков в массивах
+
             // начальная инициализация массивов
-            size_t index = 0;
-            for(auto &item : array_db) {
-                std::deque<Tick> temp = item->get_first_upper_array(db_time[index], 2, false);
-                ticks[index] = temp[0];
-                ticks_next[index] = temp[1];
-                if (ticks_next[index].empty()) {
+            for (size_t index = 0; index < db_count; ++index) {
+                buffer[index] = array_db[index]->template get_first_upper_array<std::deque<Tick>>(db_time[index], buffer_size, false);
+                buffer_index[index] = 1;
+                if (buffer[index][0].empty()) {
                     db_time[index] = data_period.stop;
                 } else {
-                    db_time[index] = ticks_next[index].timestamp + 1;
+                    db_time[index] = buffer[index][0].timestamp + 1;
                 }
-                ++index;
             } // for
-            while(true) {
-                // загрузили тики и обновлили время поиска следующего тика
-                index = 0;
-                for(auto &item : array_db) {
-                    if (db_time[index] == data_period.stop) {
-                        if (ticks[index].empty()) {
-                            ticks[index] = ticks_next[index];
-                        }
-                        ++index;
-                        continue;
-                    }
-                    if (ticks[index].empty()) {
-                        ticks[index] = ticks_next[index];
-                        ticks_next[index] = item->get_first_upper(db_time[index]);
-                        if (ticks_next[index].empty()) {
-                            db_time[index] = data_period.stop;
-                        } else {
-                            db_time[index] = ticks_next[index].timestamp + 1;
-                        }
-                    }
-                    ++index;
-                }
 
-                bool is_exit = true;
-                uint64_t min_next_timestamp = data_period.stop;
-                for (auto it : ticks_next) {
-                    if (it.timestamp != 0 && min_next_timestamp >= it.timestamp) {
-                        min_next_timestamp = it.timestamp;
-                        is_exit = false;
+            while (true) {
+                // ищем минимальный по времени тик
+                uint64_t min_next_timestamp = std::numeric_limits<uint64_t>::max();
+                size_t index_min = 0;
+                for (size_t index = 0; index < db_count; ++index) {
+                    const Tick &tick = buffer[index][buffer_index[index]];
+                    if (!tick.empty() && min_next_timestamp >= tick.timestamp) {
+                        min_next_timestamp = tick.timestamp;
+                        index_min = index;
                     }
                 }
+                // тиков больше нет, выходим
+                if (min_next_timestamp == std::numeric_limits<uint64_t>::max()) break;
+                if (min_next_timestamp >= data_period.stop) break;
 
-                bool is_exit2 = true;
-                while (true) {
-                    uint64_t min_timestamp = data_period.stop;
-                    size_t index_min = ticks.size() + 1;
-                    for (size_t i = 0; i < ticks.size(); ++i) {
-                        if (ticks[i].timestamp != 0 &&
-                            min_timestamp >= ticks[i].timestamp) {
-                            min_timestamp = ticks[i].timestamp;
-                            index_min = i;
-                            is_exit2 = false;
-                        }
-                    }
+                // вызываем функцию обратного вызова
+                db_time[index_min] = min_next_timestamp + 1;
+                callback(index_min, buffer[index_min][buffer_index[index_min]]);
+                ++buffer_index[index_min];
 
-                    if (index_min == (ticks.size() + 1)) break;
-                    if (ticks[index_min].timestamp > min_next_timestamp) break;
-                    callback(index_min, ticks[index_min]);
-                    ticks[index_min] = Tick();
+                if (buffer_index[index_min] == buffer[index_min].size()) {
+                    buffer[index_min] = array_db[index_min]->template get_first_upper_array<std::deque<Tick>>(db_time[index_min], buffer_size, false);
+                    buffer_index[index_min] = 0;
                 }
-
-                if (is_exit && is_exit2) break;
-            }
+            };
 		}
 
         enum TypesPrice {
@@ -1026,6 +1017,7 @@ namespace trading_db {
          * \param expiration_ms Экспирация
          * \param delay_ms      Задержка
          * \param period_ms     Период дискретизации. Указать 0, если замер происходит в любую миллисекунду
+         * \param between_ticks_ms  Максимальное время между тиками. Если время меньше - ошибка.
          * \return Вернет направление цены или ошибку
          */
 		inline TypesDirections get_direction(
@@ -1033,16 +1025,28 @@ namespace trading_db {
                 const uint64_t timestamp_ms,
                 const uint64_t expiration_ms,
                 const uint64_t delay_ms,
-                const uint64_t period_ms = 0) {
-            Tick tick_1 = get_first_lower(timestamp_ms);
-            if (tick_1.empty()) return TypesDirections::DIR_ERROR;
-            const uint64_t t1_delay = tick_1.server_timestamp + delay_ms;
+                const uint64_t period_ms = 0,
+                const uint64_t between_ticks_ms = 20000) noexcept {
+            const uint64_t t1_delay = timestamp_ms + delay_ms;
             const uint64_t t1 = period_ms == 0 ? t1_delay : (t1_delay - (t1_delay % period_ms) + period_ms);
+            Tick tick_1 = get_first_lower(t1, false);
+            if (tick_1.empty()) return TypesDirections::DIR_ERROR;
+            if ((t1 - tick_1.timestamp) > between_ticks_ms) return TypesDirections::DIR_ERROR;
             const uint64_t t2 = t1 + expiration_ms;
-            Tick tick_2 = get_first_lower(t2, true);
+            Tick tick_2 = get_first_lower(t2, false);
             if (tick_2.empty()) return TypesDirections::DIR_ERROR;
+            if ((t2 - tick_2.timestamp) > between_ticks_ms) return TypesDirections::DIR_ERROR;
             const double open = type == TypesPrice::USE_BID ? tick_1.bid : (type == TypesPrice::USE_ASK ? tick_1.ask : ((tick_1.bid + tick_1.ask)/2.0d));
             const double close = type == TypesPrice::USE_BID ? tick_2.bid : (type == TypesPrice::USE_ASK ? tick_2.ask : ((tick_2.bid + tick_2.ask)/2.0d));
+            /*
+            std::cout << "o " << open << " c " << close << " "
+                << xtime::get_str_time_ms((double)timestamp_ms / (double)xtime::MILLISECONDS_IN_SECOND)
+                << " "
+                << xtime::get_str_time_ms((double)tick_1.timestamp / (double)xtime::MILLISECONDS_IN_SECOND)
+                << " "
+                << xtime::get_str_time_ms((double)tick_2.timestamp / (double)xtime::MILLISECONDS_IN_SECOND)
+                << std::endl;
+                */
             if (close > open) return TypesDirections::DIR_UP;
             if (close < open) return TypesDirections::DIR_DOWN;
             return TypesDirections::DIR_UNDEFINED;
