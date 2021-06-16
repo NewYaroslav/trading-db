@@ -25,12 +25,16 @@ int main() {
 
         std::cout << "test #4" << std::endl;
         kvdb.set_value("key5", "test#5");
+        kvdb.set_int64_value("key6", 124567);
 
         std::cout << "test #5" << std::endl;
         temp = kvdb.get_all();
         for (size_t i = 0; i < temp.size(); ++i) {
             std::cout << "key: " << temp[i].key << " value: " << temp[i].value << std::endl;
         }
+
+        std::cout << "test #6" << std::endl;
+        std::cout << kvdb.get_int64_value("key6") << std::endl;
         // std::cout << "get_symbol: " << tick_db.get_symbol() << std::endl;
     }
     return 0;

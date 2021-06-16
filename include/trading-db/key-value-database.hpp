@@ -351,6 +351,15 @@ namespace trading_db {
             return false;
 		}
 
+		/** \brief Установить целое значение по ключу
+         * \param key   Ключ заметки
+         * \param value Целое значение заметки
+         * \return Вернет true в случае успешного завершения
+         */
+		inline bool set_int64_value(const std::string& key, const int64_t value) noexcept {
+		    return set_value(key, std::to_string(value));
+		}
+
         /** \brief Получить значение по ключу
          * \param key   Ключ заметки
          * \return Значение по ключу
@@ -358,6 +367,14 @@ namespace trading_db {
 		inline std::string get_value(const std::string& key) noexcept {
 			std::lock_guard<std::mutex> lock(stmt_mutex);
             return get_value_from_db(stmt_get_key_value, key).value;
+		}
+
+		/** \brief Получить целое значение по ключу
+         * \param key   Ключ заметки
+         * \return Значение по ключу
+         */
+		inline int64_t get_int64_value(const std::string& key) noexcept {
+            return std::stoll(get_value(key));
 		}
 
         /** \brief Получить весь список пар "ключ-значение"
