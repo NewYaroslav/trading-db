@@ -599,6 +599,52 @@ namespace trading_db {
             }
             return std::move(note);
 		}
+		
+		inline uint64_t get_min_max_from_db(utility::SqliteStmt &stmt) {
+            uint64_t timestamp = 0;
+            int err = 0;
+            while (true) {
+                if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
+                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_reset return code " << err << std::endl;
+                    return timestamp;
+                }
+                err = sqlite3_step(stmt.get());
+                if(err == SQLITE_BUSY) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    //TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                } else
+                if (err != SQLITE_ROW) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    //TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
+                    return timestamp;
+                }
+
+                timestamp = (uint64_t)sqlite3_column_int64(stmt.get(),0);
+                err = sqlite3_step(stmt.get());
+                if (err == SQLITE_ROW) {
+                    break;
+                } else
+                if(err == SQLITE_DONE) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    break;
+                } else
+                if(err == SQLITE_BUSY) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return SQLITE_BUSY" << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    timestamp = 0;
+                    continue;
+                }
+                break;
+            }
+            return timestamp;
+		}
 
 		bool backup_form_db(const std::string &path, sqlite3 *source_connection) {
             sqlite3 *dest_connection = nullptr;
