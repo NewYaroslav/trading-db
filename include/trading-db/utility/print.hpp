@@ -1,6 +1,6 @@
 #pragma once
-#ifndef TRADING_DB_PRINT_HPP_INCLUDED
-#define TRADING_DB_PRINT_HPP_INCLUDED
+#ifndef TRADING_DB_UTILITY_PRINT_HPP_INCLUDED
+#define TRADING_DB_UTILITY_PRINT_HPP_INCLUDED
 
 #include <thread>
 #include <mutex>
@@ -26,4 +26,4 @@ namespace trading_db {
     }; // utility
 }; // trading_db
 
-#endif // PRINT_HPP_INCLUDED
+#endif // TRADING_DB_UTILITY_PRINT_HPP_INCLUDED

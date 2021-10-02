@@ -118,7 +118,8 @@ namespace trading_db {
             }
         };
 
-        bool prepare(sqlite3 *sqlite_db, const char *query) {
+        bool prepare(sqlite3 *sqlite_db, const std::string &request) {
+            const char *query = request.c_str();
             sqlite3_stmt *stmt = nullptr;
             if(sqlite3_prepare_v2(sqlite_db, query, -1, &stmt, nullptr) == SQLITE_OK) {
                 int err = sqlite3_step(stmt);

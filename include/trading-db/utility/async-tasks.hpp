@@ -1,5 +1,5 @@
 #pragma once
-#ifndef TRADING_DB_ASYN_CTASKS_HPP_INCLUDED
+#ifndef TRADING_DB_ASYNC_TASKS_HPP_INCLUDED
 #define TRADING_DB_ASYNC_TASKS_HPP_INCLUDED
 
 #include <thread>
@@ -56,17 +56,23 @@ namespace trading_db {
                 clear();
             } // creat_task
 
+            /** \brief Проверить флаг сброса
+             * \return Вернет true в случае наличия сброса
+             */
             inline bool check_shutdown() const noexcept {
                 return is_shutdown;
             };
 
+            /** \brief Ожидание завершения всех задач
+             */
             inline void wait() {
                 std::lock_guard<std::mutex> lock(futures_mutex);
                 for(size_t i = 0; i < futures.size(); ++i) {
-                    if(futures[i].valid()) {
+                    std::shared_future<void> share = futures[i].share();
+                    if(share.valid()) {
                         try {
-                            futures[i].wait();
-                            futures[i].get();
+                            share.wait();
+                            share.get();
                         } catch(...) {}
                     }
                 }
@@ -91,4 +97,4 @@ namespace trading_db {
     }; // utility
 }; // trading_db
 
-#endif // TRADING_DB_ASYN_TASKS_HPP_INCLUDED
+#endif // TRADING_DB_ASYNC_TASKS_HPP_INCLUDED

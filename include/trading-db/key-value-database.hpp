@@ -19,20 +19,12 @@
 
 namespace trading_db {
 
-    /** \brief Класс базы данных тика
+    /** \brief Класс базы данных типа Ключ-Значение
      */
 	class KeyValueDatabase {
     public:
 
-        class Config {
-        public:
-            int busy_timeout = 0;
-            std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
-        };
-
-        Config config;
-
-        /** \brief Структура настроек
+        /** \brief Структура Ключ-Значение
          */
         class KeyValue {
         public:
@@ -41,20 +33,33 @@ namespace trading_db {
         };
 
     private:
+
+        /** \brief Класс конфигурации базы данных
+         */
+        class Config {
+        public:
+            const std::string title = "trading_db::KeyValueDatabase ";
+            int busy_timeout = 0;
+            std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
+        };
+
+        Config config;  /**< Конфигурация базы данных */
+
         std::string database_name;
+
         sqlite3 *sqlite_db = nullptr;
         utility::SqliteTransaction sqlite_transaction;
         utility::SqliteStmt stmt_replace_key_value;
         utility::SqliteStmt stmt_get_key_value;
         utility::SqliteStmt stmt_get_all_key_value;
-
         std::mutex stmt_mutex;
-
-        utility::AsyncTasks async_tasks;
 
 		bool is_backup = ATOMIC_VAR_INIT(false);
 		std::mutex backup_mutex;
 
+		utility::AsyncTasks async_tasks;
+
+		template<class T>
         bool replace(KeyValue &item, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) {
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
@@ -75,7 +80,7 @@ namespace trading_db {
             if(err == SQLITE_BUSY) {
                 if (config.use_log) {
                     TRADING_DB_TICK_DB_PRINT
-                        << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                        << config.title << "error in [file " << __FILE__
                         << ", line " << __LINE__
                         << ", func " << __FUNCTION__
                         << "], message: sqlite3_step return SQLITE_BUSY" << std::endl;
@@ -86,7 +91,7 @@ namespace trading_db {
             } else {
                 if (config.use_log) {
                     TRADING_DB_TICK_DB_PRINT
-                        << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                        << config.title << "error in [file " << __FILE__
                         << ", line " << __LINE__
                         << ", func " << __FUNCTION__
                         << "], message: " << sqlite3_errmsg(sqlite_db)
@@ -106,7 +111,7 @@ namespace trading_db {
             if(sqlite3_open_v2(db_name.c_str(), &sqlite_db_ptr, flags, nullptr) != SQLITE_OK) {
                 if (config.use_log) {
                     TRADING_DB_TICK_DB_PRINT
-                        << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                        << config.title << "error in [file " << __FILE__
                         << ", line " << __LINE__
                         << ", func " << __FUNCTION__
                         << "], message: " << sqlite3_errmsg(sqlite_db_ptr)
@@ -149,7 +154,7 @@ namespace trading_db {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
                     if (config.use_log) {
                         TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                            << config.title << "error in [file " << __FILE__
                             << ", line " << __LINE__
                             << ", func " << __FUNCTION__
                             << "], message: sqlite3_reset return code " << err << std::endl;
@@ -159,7 +164,7 @@ namespace trading_db {
                 if (sqlite3_bind_text(stmt.get(), 1, key.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
                     if (config.use_log) {
                         TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                            << config.title << "error in [file " << __FILE__
                             << ", line " << __LINE__
                             << ", func " << __FUNCTION__
                             << "], message: sqlite3_reset return code " << err << std::endl;
@@ -198,7 +203,7 @@ namespace trading_db {
                     key_value = KeyValue();
                     if (config.use_log) {
                         TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                            << config.title << "error in [file " << __FILE__
                             << ", line " << __LINE__
                             << ", func " << __FUNCTION__
                             << "], message: sqlite3_step return SQLITE_BUSY" << std::endl;
@@ -219,7 +224,7 @@ namespace trading_db {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
                     if (config.use_log) {
                         TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                            << config.title << "error in [file " << __FILE__
                             << ", line " << __LINE__
                             << ", func " << __FUNCTION__
                             << "], message: sqlite3_reset return code " << err << std::endl;
@@ -259,7 +264,7 @@ namespace trading_db {
                     if(err == SQLITE_BUSY) {
                         if (config.use_log) {
                             TRADING_DB_TICK_DB_PRINT
-                                << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                                << config.title << "error in [file " << __FILE__
                                 << ", line " << __LINE__
                                 << ", func " << __FUNCTION__
                                 << "], message: sqlite3_step return SQLITE_BUSY" << std::endl;
@@ -273,7 +278,7 @@ namespace trading_db {
                     buffer.clear();
                     if (config.use_log) {
                         TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::KeyValueDatabase error in [file " << __FILE__
+                            << config.title << "error in [file " << __FILE__
                             << ", line " << __LINE__
                             << ", func " << __FUNCTION__
                             << "], message: sqlite3_step return SQLITE_BUSY" << std::endl;
@@ -322,7 +327,7 @@ namespace trading_db {
                     callback(path, true);
                     if (config.use_log) {
                         TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::KeyValueDatabase error in [file "
+                            << config.title << "error in [file "
                             << __FILE__ << ", line "
                             << __LINE__ << ", func "
                             << __FUNCTION__ << "], message: backup return false" << std::endl;
@@ -348,6 +353,20 @@ namespace trading_db {
             while (true) {
                 std::lock_guard<std::mutex> lock(stmt_mutex);
                 if (replace(kv, sqlite_transaction, stmt_replace_key_value)) return true;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            return false;
+		}
+
+		/** \brief Установить значение по ключу
+         * \param value Объект ключ-значение
+         * \return Вернет true в случае успешного завершения
+         */
+        template<class T>
+		inline bool set_value(const T& value) noexcept {
+            while (true) {
+                std::lock_guard<std::mutex> lock(stmt_mutex);
+                if (replace(value, sqlite_transaction, stmt_replace_key_value)) return true;
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             return false;

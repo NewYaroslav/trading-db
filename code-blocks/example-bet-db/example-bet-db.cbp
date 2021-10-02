@@ -23,6 +23,7 @@
 				<Compiler>
 					<Add option="-O2" />
 					<Add option="-std=c++14" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/xtime_cpp/src" />
@@ -39,8 +40,7 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="../../include/bet-db.hpp" />
-		<Unit filename="../../include/tick-db.hpp" />
+		<Unit filename="../../include/trading-db/bet-database.hpp" />
 		<Unit filename="../../lib/sqlite-amalgamation-3340100/sqlite3.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -50,9 +50,6 @@
 		<Unit filename="../../lib/xtime_cpp/src/xtime.hpp" />
 		<Unit filename="main.cpp" />
 		<Extensions>
-			<code_completion />
-			<envvars />
-			<debugger />
 			<lib_finder disable_auto="1" />
 		</Extensions>
 	</Project>
