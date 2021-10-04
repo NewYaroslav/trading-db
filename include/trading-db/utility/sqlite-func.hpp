@@ -6,32 +6,31 @@
 #include "print.hpp"
 #include <sqlite3.h>
 #include <string>
+#include <functional>
 
 namespace trading_db {
     namespace utility {
 
+        /** \brief Класс для предкомпиляции запроса SQL
+         */
         class SqliteStmt {
         private:
             sqlite3_stmt *stmt = nullptr;
+            int err = SQLITE_OK;
         public:
+
+            std::function<void(const int code, const std::string message)> on_error = nullptr;
 
             SqliteStmt() {};
 
             SqliteStmt(sqlite3 *sqlite_db, const char *query) {
-                if(sqlite3_prepare_v2(sqlite_db, query, -1, &stmt, nullptr) != SQLITE_OK) {
+                err = sqlite3_prepare_v2(sqlite_db, query, -1, &stmt, nullptr);
+                if(err != SQLITE_OK) {
                     sqlite3_finalize(stmt);
                     stmt = nullptr;
-                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "]" << std::endl;
                 }
             }
 
-            inline void init(sqlite3 *sqlite_db, const char *query) noexcept {
-                if(sqlite3_prepare_v2(sqlite_db, query, -1, &stmt, nullptr) != SQLITE_OK) {
-                    sqlite3_finalize(stmt);
-                    stmt = nullptr;
-                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "]" << std::endl;
-                }
-            }
 
             ~SqliteStmt() {
                 if (stmt != nullptr) {
@@ -40,11 +39,29 @@ namespace trading_db {
                 }
             }
 
+
+            inline bool init(sqlite3 *sqlite_db, const char *query) noexcept {
+                err = sqlite3_prepare_v2(sqlite_db, query, -1, &stmt, nullptr);
+                if(err != SQLITE_OK) {
+                    sqlite3_finalize(stmt);
+                    stmt = nullptr;
+                    if (on_error != nullptr) on_error(err, "sqlite3_prepare_v2 error");
+                    return false;
+                }
+                return true;
+            }
+
+            inline const int get_error_code() noexcept {
+                return err;
+            }
+
             inline sqlite3_stmt *get() noexcept {
                 return stmt;
             }
         };
 
+        /** \brief Класс для осуществления транзакций
+         */
         class SqliteTransaction {
         private:
             SqliteStmt stmt_begin_transaction;
@@ -52,6 +69,8 @@ namespace trading_db {
             SqliteStmt stmt_rollback;
             sqlite3 *db = nullptr;
         public:
+
+            std::function<void(const int code, const std::string message)> on_error = nullptr;
 
             SqliteTransaction() {};
 
@@ -62,16 +81,20 @@ namespace trading_db {
                 db = sqlite_db;
             }
 
-            inline void init(sqlite3 *sqlite_db) noexcept {
+            inline bool init(sqlite3 *sqlite_db) noexcept {
                 stmt_begin_transaction.init(sqlite_db, "BEGIN TRANSACTION");
                 stmt_commit.init(sqlite_db, "COMMIT");
                 stmt_rollback.init(sqlite_db, "ROLLBACK");
                 db = sqlite_db;
+                if (stmt_begin_transaction.get_error_code() != SQLITE_OK) return false;
+                if (stmt_commit.get_error_code() != SQLITE_OK) return false;
+                if (stmt_rollback.get_error_code() != SQLITE_OK) return false;
+                return true;
             }
 
             inline bool begin_transaction() noexcept {
                 while (true) {
-                    int err = sqlite3_step(stmt_begin_transaction.get());
+                    const int err = sqlite3_step(stmt_begin_transaction.get());
                     sqlite3_reset(stmt_begin_transaction.get());
                     if(err == SQLITE_DONE) {
                         return true;
@@ -79,8 +102,7 @@ namespace trading_db {
                     if(err == SQLITE_BUSY) {
                         //...
                     } else {
-                        TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return " << err << std::endl;
-                        //...
+                        if (on_error != nullptr) on_error(err, "sqlite3_step error");
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
@@ -89,7 +111,7 @@ namespace trading_db {
 
             inline bool commit() noexcept {
                 while (true) {
-                    int err = sqlite3_step(stmt_commit.get());
+                    const int err = sqlite3_step(stmt_commit.get());
                     sqlite3_reset(stmt_commit.get());
                     if(err == SQLITE_DONE) {
                         return true;
@@ -99,7 +121,7 @@ namespace trading_db {
                         std::this_thread::sleep_for(std::chrono::milliseconds(1));
                         continue;
                     } else {
-                        TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
+                        if (on_error != nullptr) on_error(err, "sqlite3_step error");
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
@@ -107,12 +129,12 @@ namespace trading_db {
             }
 
             bool rollback() {
-                int err = sqlite3_step(stmt_rollback.get());
+                const int err = sqlite3_step(stmt_rollback.get());
                 sqlite3_reset(stmt_rollback.get());
                 if (err == SQLITE_DONE) {
                     return true;
                 } else {
-                    TRADING_DB_TICK_DB_PRINT << "trading_db error in [file " << __FILE__ << ", line " << __LINE__ << ", func " << __FUNCTION__ << "], message: sqlite3_step return code " << err << std::endl;
+                    if (on_error != nullptr) on_error(err, "sqlite3_step error");
                 }
                 return false;
             }

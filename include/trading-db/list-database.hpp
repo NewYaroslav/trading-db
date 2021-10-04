@@ -59,12 +59,14 @@ namespace trading_db {
         utility::SqliteStmt stmt_insert_value;
         utility::SqliteStmt stmt_get_value;
         utility::SqliteStmt stmt_get_all_items;
-        std::mutex stmt_mutex;
+        utility::SqliteStmt stmt_get_all_values;
         // бэкап
 		bool is_backup = ATOMIC_VAR_INIT(false);
 		std::mutex backup_mutex;
 		// флаг сброса
 		std::atomic<bool> is_shutdown = ATOMIC_VAR_INIT(false);
+
+		std::mutex method_mutex;
 
 		utility::AsyncTasks async_tasks;
 
@@ -106,17 +108,22 @@ namespace trading_db {
         /** \brief Инициализировать БД
          */
         bool init_db(const std::string &db_name, const bool readonly = false) {
-            if (!open_db(this->sqlite_db, db_name, readonly)) {
-                sqlite3_close_v2(this->sqlite_db);
-                this->sqlite_db = nullptr;
+            if (!open_db(sqlite_db, db_name, readonly)) {
+                sqlite3_close_v2(sqlite_db);
+                sqlite_db = nullptr;
                 return false;
             }
 
-            sqlite_transaction.init(this->sqlite_db);
-            stmt_replace_item.init(this->sqlite_db, "INSERT OR REPLACE INTO 'List' (key, value) VALUES (?, ?)");
-            stmt_insert_value.init(this->sqlite_db, "INSERT INTO 'List' (value) VALUES (?)");
-            stmt_get_value.init(this->sqlite_db, "SELECT value FROM 'List' WHERE key == :x");
-            stmt_get_all_items.init(this->sqlite_db, "SELECT * FROM 'List'");
+            if (!sqlite_transaction.init(sqlite_db) ||
+                !stmt_replace_item.init(sqlite_db, "INSERT OR REPLACE INTO 'List' (key, value) VALUES (?, ?)") ||
+                !stmt_insert_value.init(sqlite_db, "INSERT INTO 'List' (value) VALUES (?)") ||
+                !stmt_get_value.init(sqlite_db, "SELECT value FROM 'List' WHERE key == :x") ||
+                !stmt_get_all_items.init(sqlite_db, "SELECT * FROM 'List'") ||
+                !stmt_get_all_values.init(sqlite_db, "SELECT value FROM 'List'")) {
+                sqlite3_close_v2(sqlite_db);
+                sqlite_db = nullptr;
+                return false;
+            }
             return true;
         }
 
@@ -239,7 +246,7 @@ namespace trading_db {
                     return T();
                 }
                 if (sqlite3_bind_int64(stmt.get(), 1, key) != SQLITE_OK) {
-                    print_error("sqlite3_reset return code " + std::to_string(err));
+                    print_error("sqlite3_bind_int64 error");
                     return T();
                 }
                 err = sqlite3_step(stmt.get());
@@ -334,6 +341,59 @@ namespace trading_db {
             return std::move(buffer);
 		}
 
+		template<class T>
+		inline T get_values(utility::SqliteStmt &stmt) {
+            T buffer;
+            int err = 0;
+            while (true) {
+                if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
+                    print_error("sqlite3_reset return code " + std::to_string(err));
+                    return T();
+                }
+                err = sqlite3_step(stmt.get());
+                if(err == SQLITE_BUSY) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                } else
+                if (err != SQLITE_ROW) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    return T();
+                }
+
+                err = 0;
+                while (true) {
+                    const std::string value = (const char *)sqlite3_column_text(stmt.get(), 0);
+                    buffer.push_back(value);
+                    err = sqlite3_step(stmt.get());
+                    if (err == SQLITE_ROW) {
+                        continue;
+                    } else
+                    if(err == SQLITE_DONE) {
+                        sqlite3_reset(stmt.get());
+                        sqlite3_clear_bindings(stmt.get());
+                        break;
+                    } else
+                    if(err == SQLITE_BUSY) {
+                        print_error("sqlite3_step return SQLITE_BUSY");
+                        break;
+                    }
+                }
+                if(err == SQLITE_BUSY) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    buffer.clear();
+                    print_error("sqlite3_step return SQLITE_BUSY");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+                break;
+            }
+            return std::move(buffer);
+		}
+
 		inline std::map<int64_t, std::string> get_map_items(utility::SqliteStmt &stmt) {
             std::map<int64_t, std::string> buffer;
             int err = 0;
@@ -388,24 +448,50 @@ namespace trading_db {
             return std::move(buffer);
 		}
 
+		const bool check_init_db() noexcept {
+            return (sqlite_db != nullptr);
+		}
+
 	public:
 
-        /** \brief Конструктор хранилища тиков
-         * \param path  Путь к файлу
-         */
-		ListDatabase(const std::string &path, const bool readonly = false) :
-            database_name(path) {
-            if (init_db(path, readonly)) {
+        ListDatabase() {};
 
-            }
+        /** \brief Конструктор хранилища списка значений
+         * \param path      Путь к файлу
+         * \param readonly  Флаг "только чтение"
+         * \param use_log   Включить вывод логов
+         */
+		ListDatabase(
+                const std::string &path,
+                const bool readonly = false,
+                const bool use_log = false) :
+            database_name(path) {
+            init_db(path, readonly);
+            config.use_log = use_log;
 		}
 
 		~ListDatabase() {
             is_shutdown = true;
             async_tasks.clear();
-            if (this->sqlite_db != nullptr) {
-                sqlite3_close_v2(this->sqlite_db);
-            }
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (sqlite_db != nullptr) sqlite3_close_v2(this->sqlite_db);
+		}
+
+		/** \brief Инициализировать хранилище списка значений
+         * \param path  Путь к файлу
+         * \param readonly  Флаг "только чтение"
+         * \param use_log   Включить вывод логов
+         */
+		bool init(
+                const std::string &path,
+                const bool readonly = false,
+                const bool use_log = false) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            database_name = path;
+            init_db(path, readonly);
+            config.use_log = use_log;
+            return true;
 		}
 
         /** \brief Создать бэкап
@@ -416,6 +502,10 @@ namespace trading_db {
 		bool backup(
                 const std::string &path,
                 const std::function<void(const std::string &path, const bool is_error)> callback) {
+            {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
             {
                 std::lock_guard<std::mutex> lock(backup_mutex);
                 if (is_backup) return false;
@@ -442,9 +532,13 @@ namespace trading_db {
          */
         template<class T>
 		inline bool set_items(const T &items) noexcept {
+            {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
             while (!is_shutdown) {
                 {
-                    std::lock_guard<std::mutex> lock(stmt_mutex);
+                    std::lock_guard<std::mutex> lock(method_mutex);
                     if (replace_buffer<T>(items, sqlite_transaction, stmt_replace_item)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -457,9 +551,13 @@ namespace trading_db {
          * \return Вернет true в случае успешного завершения
          */
 		inline bool set_map_items(const std::map<int64_t, std::string> &items) noexcept {
+            {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
             while (!is_shutdown) {
                 {
-                    std::lock_guard<std::mutex> lock(stmt_mutex);
+                    std::lock_guard<std::mutex> lock(method_mutex);
                     if (replace_map(items, sqlite_transaction, stmt_replace_item)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -473,12 +571,18 @@ namespace trading_db {
          * \return Вернет true в случае успешного завершения
          */
 		inline bool set_item(Item &item) noexcept {
+            {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
             while (!is_shutdown) {
-                std::lock_guard<std::mutex> lock(stmt_mutex);
-                if (item.key <= 0) {
-                    if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
-                } else {
-                    if (replace_or_insert(item, sqlite_transaction, stmt_replace_item)) return true;
+                {
+                    std::lock_guard<std::mutex> lock(method_mutex);
+                    if (item.key <= 0) {
+                        if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
+                    } else {
+                        if (replace_or_insert(item, sqlite_transaction, stmt_replace_item)) return true;
+                    }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -490,10 +594,14 @@ namespace trading_db {
          * \return Вернет true в случае успешного завершения
          */
 		inline bool set_value(const std::string& value) noexcept {
+		    {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
 		    Item item{0, value};
             while (!is_shutdown) {
                 {
-                    std::lock_guard<std::mutex> lock(stmt_mutex);
+                    std::lock_guard<std::mutex> lock(method_mutex);
                     if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -501,16 +609,20 @@ namespace trading_db {
             return false;
 		}
 
-        /** \brief Установить значение по ключу
+        /** \brief Установить элемент списка
          * \param key   Ключ элемента списка
          * \param value Значение элемента списка
          * \return Вернет true в случае успешного завершения
          */
-		inline bool set_value(const int64_t key, const std::string& value) noexcept {
+		inline bool set_item(const int64_t key, const std::string& value) noexcept {
+		    {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
 		    Item item{key, value};
             while (!is_shutdown) {
                 {
-                    std::lock_guard<std::mutex> lock(stmt_mutex);
+                    std::lock_guard<std::mutex> lock(method_mutex);
                     if (item.key <= 0) {
                         if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
                     } else {
@@ -523,12 +635,20 @@ namespace trading_db {
 		}
 
 		/** \brief Установить целое значение по ключу
+         * \param value Целое значение элемента списка
+         * \return Вернет true в случае успешного завершения
+         */
+		inline bool set_int64_value(const int64_t value) noexcept {
+		    return set_value(std::to_string(value));
+		}
+
+		/** \brief Установить элемент списка с целым значением
          * \param key   Ключ элемента списка
          * \param value Целое значение элемента списка
          * \return Вернет true в случае успешного завершения
          */
-		inline bool set_int64_value(const int64_t key, const int64_t value) noexcept {
-		    return set_value(key, std::to_string(value));
+		inline bool set_item_int64_value(const int64_t key, const int64_t value) noexcept {
+		    return set_item(key, std::to_string(value));
 		}
 
         /** \brief Получить значение по ключу
@@ -536,7 +656,8 @@ namespace trading_db {
          * \return Значение элемента списка по ключу
          */
 		inline std::string get_value(const int64_t key) noexcept {
-			std::lock_guard<std::mutex> lock(stmt_mutex);
+			std::lock_guard<std::mutex> lock(method_mutex);
+			if (!check_init_db()) return std::string();
             return get_item<Item>(stmt_get_value, key).value;
 		}
 
@@ -548,36 +669,93 @@ namespace trading_db {
             return std::stoll(get_value(key));
 		}
 
-        /** \brief Получить весь список пар "ключ-значение"
-         * \return Массив пар "ключ-значение"
+		/** \brief Получить весь список значений
+         * \return Список значений
          */
         template<class T>
-		inline T get_all() noexcept {
-            std::lock_guard<std::mutex> lock(stmt_mutex);
+		inline T get_all_values() noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return T();
+            return get_values<T>(stmt_get_all_values);
+		}
+
+        /** \brief Получить весь список элементов
+         * \return Массив элементов списка
+         */
+        template<class T>
+		inline T get_all_items() noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return T();
             return get_items<T>(stmt_get_all_items);
 		}
 
-		/** \brief Получить весь список пар "ключ-значение" в виде map
-         * \return Массив пар "ключ-значение"
+		/** \brief Получить весь список элементов списка в виде map
+         * \return Массив элементов списка
          */
-		std::map<int64_t, std::string> get_map_all() noexcept {
-            std::lock_guard<std::mutex> lock(stmt_mutex);
+		std::map<int64_t, std::string> get_map_all_items() noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return std::map<int64_t, std::string>();
             return get_map_items(stmt_get_all_items);
 		}
 
-        /** \brief Очистить все данные
+        /** \brief Удалить все данные
          */
-		inline bool remove_all() {
-            std::lock_guard<std::mutex> lock(stmt_mutex);
+		inline bool remove_all() noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
             return utility::prepare(sqlite_db, "DELETE FROM 'List'");
 		}
 
-		/** \brief Очистить от элемента по ключу
+		/** \brief Удалить значение по ключу
 		 * \param key   Ключ элемента списка
          */
-		inline bool remove_item(const int64_t key) {
-            std::lock_guard<std::mutex> lock(stmt_mutex);
+		inline bool remove_value(const int64_t key) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
             return utility::prepare(sqlite_db, "DELETE FROM 'List' WHERE key == " + std::to_string(key));
+		}
+
+        /** \brief Удалить элемент
+		 * \param item  Элемент для удаления
+         */
+		inline bool remove_item(const Item& item) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            return utility::prepare(sqlite_db, "DELETE FROM 'List' WHERE key == " + item.key);
+		}
+
+		/** \brief Удалить значения по ключам
+		 * \param keys  Массив ключей элементов списка
+         */
+        template<class T>
+		inline bool remove_values(const T &keys) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            if (keys.empty()) return false;
+            std::string message("DELETE FROM 'List' WHERE key IN (");
+            for (auto it = keys.begin(); it != keys.end(); ++it) {
+                if (it != keys.begin()) message += ",";
+                message += *it;
+            }
+            message += ")";
+            return utility::prepare(sqlite_db, message);
+		}
+
+		/** \brief Удалить массив элементов списка
+		 * \param items     Массив элементов списка
+         */
+        template<class T>
+		inline bool remove_items(const T &items) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            if (items.empty()) return false;
+            std::string message("DELETE FROM 'List' WHERE key IN (");
+            for (auto it = items.begin(); it != items.end(); ++it) {
+                if (it != items.begin()) message += ",";
+                message += it->key;
+            }
+            message += ")";
+            return utility::prepare(sqlite_db, message);
 		}
 	};
 
