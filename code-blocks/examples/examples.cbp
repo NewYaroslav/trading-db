@@ -60,6 +60,60 @@
 					<Add directory="../../include" />
 				</Linker>
 			</Target>
+			<Target title="example-int-key-blob-value-db">
+				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../include" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../include" />
+				</Linker>
+			</Target>
+			<Target title="example-compact-candles-dataset">
+				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../include" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../include" />
+				</Linker>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -71,6 +125,7 @@
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
 		<Unit filename="../../include/trading-db/tick-database.hpp" />
 		<Unit filename="../../include/trading-db/utility/async-tasks.hpp" />
+		<Unit filename="../../include/trading-db/utility/compact_candles_dataset.hpp" />
 		<Unit filename="../../include/trading-db/utility/files.hpp" />
 		<Unit filename="../../include/trading-db/utility/print.hpp" />
 		<Unit filename="../../include/trading-db/utility/protection.hpp" />
@@ -82,6 +137,13 @@
 		<Unit filename="../../lib/sqlite_orm/include/sqlite_orm/sqlite_orm.h" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.cpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/ztime.cpp" />
+		<Unit filename="example-compact-candles-dataset.cpp">
+			<Option target="example-compact-candles-dataset" />
+		</Unit>
+		<Unit filename="example-int-key-blob-value-db.cpp">
+			<Option target="example-int-key-blob-value-db" />
+		</Unit>
 		<Unit filename="example-key-value-db.cpp">
 			<Option target="example-key-value-db" />
 		</Unit>
