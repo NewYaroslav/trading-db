@@ -11,6 +11,7 @@
 #include "utility/async-tasks.hpp"
 #include "utility/print.hpp"
 #include "utility/files.hpp"
+#include <siphash.hpp>
 #include <mutex>
 #include <atomic>
 #include <future>
@@ -82,15 +83,16 @@ namespace trading_db {
 
         /** \brief Открыть БД
          */
-        bool open_db(sqlite3 *&sqlite_db_ptr, const std::string &db_name, const bool readonly = false) {
+        bool open_db(
+                sqlite3 *&sqlite_db_ptr,
+                const std::string &db_name,
+                const bool readonly = false) noexcept {
             utility::create_directory(db_name, true);
             // открываем и возможно еще создаем таблицу
             int flags = readonly ?
                 (SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :
                 (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX);
             if(sqlite3_open_v2(db_name.c_str(), &sqlite_db_ptr, flags, nullptr) != SQLITE_OK) {
-                sqlite3_close_v2(sqlite_db_ptr);
-                sqlite_db_ptr = nullptr;
                 print_error(std::string(sqlite3_errmsg(sqlite_db_ptr)) + ", db name " + db_name);
                 return false;
             }
@@ -107,7 +109,9 @@ namespace trading_db {
 
         /** \brief Инициализировать БД
          */
-        bool init_db(const std::string &db_name, const bool readonly = false) {
+        bool init_db(
+                const std::string &db_name,
+                const bool readonly = false) noexcept {
             if (!open_db(sqlite_db, db_name, readonly)) {
                 sqlite3_close_v2(sqlite_db);
                 sqlite_db = nullptr;
@@ -128,10 +132,13 @@ namespace trading_db {
         }
 
 		template<class T>
-		bool replace_or_insert(T &item, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) {
+		bool replace_or_insert_db(
+                T &item,
+                utility::SqliteTransaction &transaction,
+                utility::SqliteStmt &stmt) noexcept {
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
-            if (item.key <= 0) {
+            if (item.key == 0) {
                 if (sqlite3_bind_text(stmt.get(), 1, item.value.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
@@ -163,14 +170,15 @@ namespace trading_db {
                 return false;
             }
             if (!transaction.commit()) return false;
-            if (item.key <= 0) {
-                item.key = sqlite3_last_insert_rowid(sqlite_db);
-            }
+            if (item.key == 0) item.key = sqlite3_last_insert_rowid(sqlite_db);
             return true;
         }
 
         template<class T>
-        bool replace_buffer(const T &buffer, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) {
+        bool replace_buffer_db(
+                const T &buffer,
+                utility::SqliteTransaction &transaction,
+                utility::SqliteStmt &stmt) noexcept {
             if (buffer.empty()) return true;
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
@@ -203,7 +211,10 @@ namespace trading_db {
             return true;
         }
 
-        bool replace_map(const std::map<int64_t, std::string> &buffer, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) {
+        bool replace_map_db(
+                const std::map<int64_t, std::string> &buffer,
+                utility::SqliteTransaction &transaction,
+                utility::SqliteStmt &stmt) noexcept {
             if (buffer.empty()) return true;
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
@@ -237,7 +248,9 @@ namespace trading_db {
         }
 
         template<class T>
-		inline T get_item(utility::SqliteStmt &stmt, const int64_t key) {
+		inline T get_item_db(
+                utility::SqliteStmt &stmt,
+                const int64_t key) noexcept {
             T item;
             int err = 0;
             while (true) {
@@ -286,7 +299,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		inline T get_items(utility::SqliteStmt &stmt) {
+		inline T get_items_db(utility::SqliteStmt &stmt) noexcept {
             T buffer;
             int err = 0;
             while (true) {
@@ -304,6 +317,7 @@ namespace trading_db {
                 if (err != SQLITE_ROW) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
+                    print_error("sqlite3_step return code " + std::to_string(err));
                     return T();
                 }
 
@@ -342,7 +356,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		inline T get_values(utility::SqliteStmt &stmt) {
+		inline T get_values_db(utility::SqliteStmt &stmt) noexcept {
             T buffer;
             int err = 0;
             while (true) {
@@ -394,7 +408,7 @@ namespace trading_db {
             return std::move(buffer);
 		}
 
-		inline std::map<int64_t, std::string> get_map_items(utility::SqliteStmt &stmt) {
+		inline std::map<int64_t, std::string> get_map_items_db(utility::SqliteStmt &stmt) noexcept {
             std::map<int64_t, std::string> buffer;
             int err = 0;
             while (true) {
@@ -487,7 +501,7 @@ namespace trading_db {
                 const bool readonly = false,
                 const bool use_log = false) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
-            if (!check_init_db()) return false;
+            if (check_init_db()) return false;
             database_name = path;
             init_db(path, readonly);
             config.use_log = use_log;
@@ -539,7 +553,7 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (replace_buffer<T>(items, sqlite_transaction, stmt_replace_item)) return true;
+                    if (replace_buffer_db<T>(items, sqlite_transaction, stmt_replace_item)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -558,7 +572,7 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (replace_map(items, sqlite_transaction, stmt_replace_item)) return true;
+                    if (replace_map_db(items, sqlite_transaction, stmt_replace_item)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -578,10 +592,10 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (item.key <= 0) {
-                        if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
+                    if (item.key == 0) {
+                        if (replace_or_insert_db(item, sqlite_transaction, stmt_insert_value)) return true;
                     } else {
-                        if (replace_or_insert(item, sqlite_transaction, stmt_replace_item)) return true;
+                        if (replace_or_insert_db(item, sqlite_transaction, stmt_replace_item)) return true;
                     }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -602,7 +616,36 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
+                    if (replace_or_insert_db(item, sqlite_transaction, stmt_insert_value)) return true;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            return false;
+		}
+
+		/** \brief Установить уникальное значение
+		 * Данный метод добавит значение, ключ которого вычисляется при помощи
+		 * алгоритма SipHash. Это позволит соблюдать уникальность значения в БД
+		 * при условии, что другие методы установки значения не используются
+         * \param value Значение элемента списка
+         * \return Вернет true в случае успешного завершения
+         */
+		inline bool set_unique_value(const std::string& value) noexcept {
+            {
+                std::lock_guard<std::mutex> lock(method_mutex);
+                if (!check_init_db()) return false;
+            }
+
+            const std::array<uint8_t, 16> key = {
+                0xd4, 0x96, 0xcb, 0x81, 0xec, 0x70, 0x3f, 0xae,
+                0x57, 0x14, 0x65, 0xfd, 0x44, 0xae, 0xe6, 0xf3};
+
+		    Item item{(int64_t)siphash_hpp::siphash_2_4(value, key), value};
+
+            while (!is_shutdown) {
+                {
+                    std::lock_guard<std::mutex> lock(method_mutex);
+                    if (replace_or_insert_db(item, sqlite_transaction, stmt_replace_item)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -624,9 +667,9 @@ namespace trading_db {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
                     if (item.key <= 0) {
-                        if (replace_or_insert(item, sqlite_transaction, stmt_insert_value)) return true;
+                        if (replace_or_insert_db(item, sqlite_transaction, stmt_insert_value)) return true;
                     } else {
-                        if (replace_or_insert(item, sqlite_transaction, stmt_replace_item)) return true;
+                        if (replace_or_insert_db(item, sqlite_transaction, stmt_replace_item)) return true;
                     }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -658,7 +701,7 @@ namespace trading_db {
 		inline std::string get_value(const int64_t key) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return std::string();
-            return get_item<Item>(stmt_get_value, key).value;
+            return get_item_db<Item>(stmt_get_value, key).value;
 		}
 
 		/** \brief Получить целое значение по ключу
@@ -676,7 +719,7 @@ namespace trading_db {
 		inline T get_all_values() noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return T();
-            return get_values<T>(stmt_get_all_values);
+            return get_values_db<T>(stmt_get_all_values);
 		}
 
         /** \brief Получить весь список элементов
@@ -686,7 +729,7 @@ namespace trading_db {
 		inline T get_all_items() noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return T();
-            return get_items<T>(stmt_get_all_items);
+            return get_items_db<T>(stmt_get_all_items);
 		}
 
 		/** \brief Получить весь список элементов списка в виде map
@@ -695,7 +738,7 @@ namespace trading_db {
 		std::map<int64_t, std::string> get_map_all_items() noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return std::map<int64_t, std::string>();
-            return get_map_items(stmt_get_all_items);
+            return get_map_items_db(stmt_get_all_items);
 		}
 
         /** \brief Удалить все данные

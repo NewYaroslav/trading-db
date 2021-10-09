@@ -19,24 +19,27 @@
 
 namespace trading_db {
 
-    /** \brief Класс базы данных типа Ключ-Значение
+    /** \brief Класс базы данных типа Ineger Key - Blob Value
+     * Данный класс нужен как вспомогательный для других проектов
      */
-	class KeyValueDatabase {
+    template<class BTYPE>
+	class IntKeyBlobValueDatabase {
     public:
 
         /** \brief Структура Ключ-Значение
          */
         class KeyValue {
         public:
-            std::string key;
-            std::string value;
+            int64_t key;
+            BTYPE value;
         };
 
         /** \brief Класс конфигурации базы данных
          */
         class Config {
         public:
-            const std::string title = "trading_db::KeyValueDatabase ";
+            std::string title = "trading_db::IntKeyBlobValueDatabase "; /**< Название заголовка для логов */
+            std::string table = "Data";                                 /**< Имя таблицы */
             int busy_timeout = 0;
             std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
         };
@@ -83,50 +86,55 @@ namespace trading_db {
                 (SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :
                 (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX);
             if(sqlite3_open_v2(db_name.c_str(), &sqlite_db_ptr, flags, nullptr) != SQLITE_OK) {
+                sqlite3_close_v2(sqlite_db_ptr);
+                sqlite_db_ptr = nullptr;
                 print_error(std::string(sqlite3_errmsg(sqlite_db_ptr)) + ", db name " + db_name);
                 return false;
             } else {
                 sqlite3_busy_timeout(sqlite_db_ptr, config.busy_timeout);
                 // создаем таблицу в базе данных, если она еще не создана
-                const char *create_key_value_table_sql =
-                    "CREATE TABLE IF NOT EXISTS 'KeyValue' ("
-                    "key                TEXT    PRIMARY KEY NOT NULL,"
-                    "value              TEXT                NOT NULL)";
+                const std::string create_key_value_table_sql =
+                    "CREATE TABLE IF NOT EXISTS '" + config.table + "' ("
+                    "key                INTEGER PRIMARY KEY NOT NULL,"
+                    "value              BLOB                NOT NULL)";
 
-                if (!utility::prepare(sqlite_db_ptr, create_key_value_table_sql)) return false;
+                if (!utility::prepare(sqlite_db_ptr, create_key_value_table_sql)) {
+                    print_error("utility::prepare return false");
+                    return false;
+                }
             }
             return true;
         }
 
-        bool init_db(const std::string &db_name, const bool readonly = false) noexcept {
+        bool init_db(
+                const std::string &db_name,
+                const bool readonly = false) noexcept {
             if (!open_db(sqlite_db, db_name, readonly)) {
                 sqlite3_close_v2(sqlite_db);
                 sqlite_db = nullptr;
                 return false;
             }
             if (!sqlite_transaction.init(sqlite_db) ||
-                !stmt_replace_key_value.init(sqlite_db, "INSERT OR REPLACE INTO 'KeyValue' (key, value) VALUES (?, ?)") ||
-                !stmt_get_key_value.init(sqlite_db, "SELECT * FROM 'KeyValue' WHERE key == :x") ||
-                !stmt_get_all_key_value.init(sqlite_db, "SELECT * FROM 'KeyValue'")) {
+                !stmt_replace_key_value.init(sqlite_db, "INSERT OR REPLACE INTO '" + config.table + "' (key, value) VALUES (?, ?)") ||
+                !stmt_get_key_value.init(sqlite_db, "SELECT * FROM '" + config.table + "' WHERE key == :x") ||
+                !stmt_get_all_key_value.init(sqlite_db, "SELECT value FROM '" + config.table + "'")) {
                 sqlite3_close_v2(sqlite_db);
                 sqlite_db = nullptr;
+                print_error("stmt init return false");
                 return false;
             }
             return true;
         }
 
 		template<class T>
-        bool replace_db(
-                T &pair,
-                utility::SqliteTransaction &transaction,
-                utility::SqliteStmt &stmt) noexcept {
+        bool replace(T &pair, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) noexcept {
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
-            if (sqlite3_bind_text(stmt.get(), 1, pair.key.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+            if (sqlite3_bind_int64(stmt.get(), 1, pair.key) != SQLITE_OK) {
                 transaction.rollback();
                 return false;
             }
-            if (sqlite3_bind_text(stmt.get(), 2, pair.value.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+            if (sqlite3_bind_blob(stmt.get(), 2, pair.value.data(), pair.value.size(), SQLITE_STATIC) != SQLITE_OK) {
                 transaction.rollback();
                 return false;
             }
@@ -150,19 +158,19 @@ namespace trading_db {
             return true;
         }
 
-        bool replace_map_db(
-                const std::map<std::string, std::string> &buffer,
+        bool replace_map(
+                const std::map<int64_t, BTYPE> &buffer,
                 utility::SqliteTransaction &transaction,
                 utility::SqliteStmt &stmt) noexcept {
             if (buffer.empty()) return true;
             if (!transaction.begin_transaction()) return false;
             sqlite3_reset(stmt.get());
-            for (const auto &item : buffer) {
-                if (sqlite3_bind_text(stmt.get(), 1, item.first.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+            for (const auto &pair : buffer) {
+                if (sqlite3_bind_int64(stmt.get(), 1, pair.first) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_text(stmt.get(), 2, item.second.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+                if (sqlite3_bind_blob(stmt.get(), 2, pair.second.data(), pair.second.size(), SQLITE_STATIC) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
@@ -186,19 +194,18 @@ namespace trading_db {
             return true;
         }
 
-		inline KeyValue get_pair_db(
-                utility::SqliteStmt &stmt,
-                const std::string &key) noexcept {
-            KeyValue key_value;
+        template<class T>
+		inline T get_value_from_db(utility::SqliteStmt &stmt, const int64_t key) noexcept {
+            T value;
             int err = 0;
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
                     print_error("sqlite3_reset return code " + std::to_string(err));
-                    return KeyValue();
+                    return T();
                 }
-                if (sqlite3_bind_text(stmt.get(), 1, key.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+                if (sqlite3_bind_int64(stmt.get(), 1, key) != SQLITE_OK) {
                     print_error("sqlite3_bind_text error");
-                    return KeyValue();
+                    return T();
                 }
                 err = sqlite3_step(stmt.get());
                 if(err == SQLITE_BUSY) {
@@ -210,11 +217,13 @@ namespace trading_db {
                 if (err != SQLITE_ROW) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
-                    return KeyValue();
+                    return T();
                 }
 
-                key_value.key = (const char *)sqlite3_column_text(stmt.get(),0);
-                key_value.value = (const char *)sqlite3_column_text(stmt.get(),1);
+                const void* blob = sqlite3_column_blob(stmt.get(), 0);
+                const size_t blob_bytes = sqlite3_column_bytes(stmt.get(), 0);
+                value.assign(blob, blob + blob_bytes);
+
                 err = sqlite3_step(stmt.get());
                 if (err == SQLITE_ROW) {
                     break;
@@ -227,18 +236,18 @@ namespace trading_db {
                 if(err == SQLITE_BUSY) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
-                    key_value = KeyValue();
+                    value = T();
                     print_error("sqlite3_step return SQLITE_BUSY");
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     continue;
                 }
                 break;
             }
-            return std::move(key_value);
+            return std::move(value);
 		}
 
 		template<class T>
-		inline T get_pairs_db(utility::SqliteStmt &stmt) noexcept {
+		inline T get_values_from_db(utility::SqliteStmt &stmt) {
             T buffer;
             int err = 0;
             while (true) {
@@ -256,16 +265,14 @@ namespace trading_db {
                 if (err != SQLITE_ROW) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
-                    print_error("sqlite3_step return code " + std::to_string(err));
                     return T();
                 }
 
                 err = 0;
                 while (true) {
-                    KeyValue key_value;
-                    key_value.key = (const char *)sqlite3_column_text(stmt.get(),0);
-                    key_value.value = (const char *)sqlite3_column_text(stmt.get(),1);
-                    buffer.push_back(key_value);
+                    const uint8_t *blob = (const uint8_t*)sqlite3_column_blob(stmt.get(), 0);
+                    const size_t blob_bytes = sqlite3_column_bytes(stmt.get(), 0);
+                    buffer.emplace_back(blob, blob + blob_bytes);
                     err = sqlite3_step(stmt.get());
                     if (err == SQLITE_ROW) {
                         continue;
@@ -292,8 +299,8 @@ namespace trading_db {
             return std::move(buffer);
 		}
 
-		inline std::map<std::string, std::string> get_map_pairs_db(utility::SqliteStmt &stmt) noexcept {
-            std::map<std::string, std::string> buffer;
+		inline std::map<int64_t, BTYPE> get_map_pairs_from_db(utility::SqliteStmt &stmt) {
+            std::map<int64_t, BTYPE> buffer;
             int err = 0;
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
@@ -315,10 +322,13 @@ namespace trading_db {
 
                 err = 0;
                 while (true) {
-                    KeyValue key_value;
-                    key_value.key = (const char *)sqlite3_column_text(stmt.get(), 0);
-                    key_value.value = (const char *)sqlite3_column_text(stmt.get(), 1);
-                    buffer[key_value.key] = key_value.value;
+                    const int64_t key = sqlite3_column_int64(stmt.get(), 0);
+
+                    const uint8_t* blob = (const uint8_t*)sqlite3_column_blob(stmt.get(), 1);
+                    const size_t blob_bytes = sqlite3_column_bytes(stmt.get(), 1);
+
+                    buffer[key].assign(blob, blob + blob_bytes);
+
                     err = sqlite3_step(stmt.get());
                     if (err == SQLITE_ROW) {
                         continue;
@@ -352,23 +362,9 @@ namespace trading_db {
 
 	public:
 
-        KeyValueDatabase() {};
+        IntKeyBlobValueDatabase() {};
 
-        /** \brief Конструктор хранилища пар "ключ-значение"
-         * \param path  Путь к файлу
-         * \param readonly  Флаг "только чтение"
-         * \param use_log   Включить вывод логов
-         */
-		KeyValueDatabase(
-                const std::string &path,
-                const bool readonly = false,
-                const bool use_log = false) :
-            database_name(path) {
-            init_db(path, readonly);
-            config.use_log = use_log;
-		}
-
-		~KeyValueDatabase() {
+		~IntKeyBlobValueDatabase() {
             is_shutdown = true;
             async_tasks.clear();
             std::lock_guard<std::mutex> lock(method_mutex);
@@ -382,14 +378,11 @@ namespace trading_db {
          */
 		bool init(
                 const std::string &path,
-                const bool readonly = false,
-                const bool use_log = false) noexcept {
+                const bool readonly = false) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (check_init_db()) return false;
             database_name = path;
-            init_db(path, readonly);
-            config.use_log = use_log;
-            return true;
+            return init_db(path, readonly);
 		}
 
         /** \brief Создать бэкап
@@ -428,7 +421,7 @@ namespace trading_db {
          * \param value Значение пары "ключ-значение"
          * \return Вернет true в случае успешного завершения
          */
-		inline bool set_pair(const std::string& key, const std::string& value) noexcept {
+		inline bool set_pair(const int64_t key, const BTYPE &value) noexcept {
 		    {
                 std::lock_guard<std::mutex> lock(method_mutex);
                 if (!check_init_db()) return false;
@@ -437,7 +430,7 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (replace_db(pair, sqlite_transaction, stmt_replace_key_value)) return true;
+                    if (replace(pair, sqlite_transaction, stmt_replace_key_value)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -457,7 +450,7 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (replace_db(pair, sqlite_transaction, stmt_replace_key_value)) return true;
+                    if (replace(pair, sqlite_transaction, stmt_replace_key_value)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -468,7 +461,7 @@ namespace trading_db {
          * \param pairs Массив пар "ключ-значение"
          * \return Вернет true в случае успешного завершения
          */
-		inline bool set_map_pairs(const std::map<std::string, std::string> &pairs) noexcept {
+		inline bool set_map_pairs(const std::map<int64_t, BTYPE> &pairs) noexcept {
             {
                 std::lock_guard<std::mutex> lock(method_mutex);
                 if (!check_init_db()) return false;
@@ -476,67 +469,40 @@ namespace trading_db {
             while (!is_shutdown) {
                 {
                     std::lock_guard<std::mutex> lock(method_mutex);
-                    if (replace_map_db(pairs, sqlite_transaction, stmt_replace_key_value)) return true;
+                    if (replace_map(pairs, sqlite_transaction, stmt_replace_key_value)) return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             return false;
 		}
 
-		/** \brief Установить пару "ключ-значение" с целочисленным значением
-         * \param key   Ключ пары "ключ-значение"
-         * \param value Целое значение пары "ключ-значение"
-         * \return Вернет true в случае успешного завершения
-         */
-		inline bool set_pair_int64_value(const std::string& key, const int64_t value) noexcept {
-		    return set_pair(key, std::to_string(value));
-		}
-
         /** \brief Получить значение по ключу
          * \param key   Ключ заметки
          * \return Значение по ключу
          */
-		inline std::string get_value(const std::string& key) noexcept {
+		inline BTYPE get_value(const int64_t key) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
-			if (!check_init_db()) return std::string();
-            return get_pair_db(stmt_get_key_value, key).value;
-		}
-
-		/** \brief Получить пару "ключ-значение" по ключу
-         * \param key   Ключ пары "ключ-значение"
-         * \return Пара "ключ-значение"
-         */
-		inline KeyValue get_pair(const std::string& key) noexcept {
-			std::lock_guard<std::mutex> lock(method_mutex);
-			if (!check_init_db()) return KeyValue();
-            return get_pair_db(stmt_get_key_value, key);
-		}
-
-		/** \brief Получить целое значение по ключу
-         * \param key   Ключ пары "ключ-значение"
-         * \return Значение по ключу
-         */
-		inline int64_t get_int64_value(const std::string& key) noexcept {
-            return std::stoll(get_value(key));
+			if (!check_init_db()) return BTYPE();
+            return get_value_from_db(stmt_get_key_value, key);
 		}
 
         /** \brief Получить весь список пар "ключ-значение"
          * \return Массив пар "ключ-значение"
          */
         template<class T>
-		inline T get_all_pairs() noexcept {
+		inline T get_all_values() noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return T();
-            return get_pairs_db<T>(stmt_get_all_key_value);
+            return get_values_from_db<T>(stmt_get_all_key_value);
 		}
 
 		/** \brief Получить весь список пар "ключ-значение" в виде map
          * \return Массив пар "ключ-значение"
          */
-		std::map<std::string, std::string> get_map_all_pairs() noexcept {
+		std::map<int64_t, BTYPE> get_map_all_pairs() noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
-            if (!check_init_db()) return std::map<std::string, std::string>();
-            return get_map_pairs_db(stmt_get_all_key_value);
+            if (!check_init_db()) return std::map<int64_t, BTYPE>();
+            return get_map_pairs_from_db(stmt_get_all_key_value);
 		}
 
         /** \brief Удалить все данные
@@ -544,16 +510,16 @@ namespace trading_db {
 		inline bool remove_all() noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
-            return utility::prepare(sqlite_db, "DELETE FROM 'KeyValue'");
+            return utility::prepare(sqlite_db, "DELETE FROM '" + config.table + "'");
 		}
 
 		/** \brief Удалить значение по ключу
 		 * \param key   Ключ пары "ключ-значение"
          */
-		inline bool remove_value(const std::string& key) noexcept {
+		inline bool remove_value(const int64_t key) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
-            return utility::prepare(sqlite_db, "DELETE FROM 'KeyValue' WHERE key == " + key);
+            return utility::prepare(sqlite_db, "DELETE FROM '" + config.table + "' WHERE key == " + std::to_string(key));
 		}
 
 		/** \brief Удалить пару "ключ-значение"
@@ -562,7 +528,7 @@ namespace trading_db {
 		inline bool remove_pair(const KeyValue& pair) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
-            return utility::prepare(sqlite_db, "DELETE FROM 'KeyValue' WHERE key == " + pair.key);
+            return utility::prepare(sqlite_db, "DELETE FROM '" + config.table + "' WHERE key == " + std::to_string(pair.key));
 		}
 
 		/** \brief Удалить значения по ключам
@@ -573,12 +539,10 @@ namespace trading_db {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
             if (keys.empty()) return false;
-            std::string message("DELETE FROM 'KeyValue' WHERE key IN (");
+            std::string message("DELETE FROM '" + config.table + "' WHERE key IN (");
             for (auto it = keys.begin(); it != keys.end(); ++it) {
                 if (it != keys.begin()) message += ",";
-                message += "'";
-                message += *it;
-                message += "'";
+                message += std::to_string(*it);
             }
             message += ")";
             return utility::prepare(sqlite_db, message);
@@ -592,12 +556,10 @@ namespace trading_db {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
             if (pairs.empty()) return false;
-            std::string message("DELETE FROM 'KeyValue' WHERE key IN (");
+            std::string message("DELETE FROM '" + config.table + "' WHERE key IN (");
             for (auto it = pairs.begin(); it != pairs.end(); ++it) {
                 if (it != pairs.begin()) message += ",";
-                message += "'";
-                message += it->key;
-                message += "'";
+                message += std::to_string(it->key);
             }
             message += ")";
             return utility::prepare(sqlite_db, message);

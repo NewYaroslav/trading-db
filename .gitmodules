@@ -10,3 +10,6 @@
 [submodule "lib/ztime-cpp"]
 	path = lib/ztime-cpp
 	url = https://github.com/NewYaroslav/ztime-cpp.git
+[submodule "lib/siphash-hpp"]
+	path = lib/siphash-hpp
+	url = https://github.com/NewYaroslav/siphash-hpp.git

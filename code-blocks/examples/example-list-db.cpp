@@ -4,6 +4,30 @@
 int main() {
     std::cout << "Hello world!" << std::endl;
     const std::string path("storage/example-list-db.db");
+    std::cout << "#test-0" << std::endl << std::endl;
+    {
+        trading_db::ListDatabase list_db(path);
+
+        std::cout << "#remove_all" << std::endl;
+        std::cout << list_db.remove_all() << std::endl;
+
+        std::cout << "#set_unique_value" << std::endl;
+        std::cout << list_db.set_unique_value("first") << std::endl;
+
+        std::cout << "#set_unique_value" << std::endl;
+        std::cout << list_db.set_unique_value("second") << std::endl;
+
+        std::cout << "#set_unique_value" << std::endl;
+        std::cout << list_db.set_unique_value("hello!") << std::endl;
+
+        std::cout << "#get_all_items" << std::endl;
+        std::vector<trading_db::ListDatabase::Item> items = list_db.get_all_items<std::vector<trading_db::ListDatabase::Item>>();
+        for (auto item : items) {
+            std::cout << item.key << " " << item.value << std::endl;
+        }
+
+        std::cout << "#end" << std::endl;
+    }
     std::cout << "#test-1" << std::endl << std::endl;
     {
         trading_db::ListDatabase list_db(path);

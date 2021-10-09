@@ -40,7 +40,8 @@ namespace trading_db {
             }
 
 
-            inline bool init(sqlite3 *sqlite_db, const char *query) noexcept {
+            inline bool init(sqlite3 *sqlite_db, const std::string &request) noexcept {
+                const char *query = request.c_str();
                 err = sqlite3_prepare_v2(sqlite_db, query, -1, &stmt, nullptr);
                 if(err != SQLITE_OK) {
                     sqlite3_finalize(stmt);
@@ -70,7 +71,7 @@ namespace trading_db {
             sqlite3 *db = nullptr;
         public:
 
-            std::function<void(const int code, const std::string message)> on_error = nullptr;
+            std::function<void(const int code, const std::string &message)> on_error = nullptr;
 
             SqliteTransaction() {};
 
