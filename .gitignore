@@ -1,0 +1,16 @@
+# These are some examples of commonly ignored file patterns.
+# You should customize this list as applicable to your project.
+# Learn more about .gitignore:
+#     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
+
+code-blocks/*/obj/*
+code-blocks/*/*.dll
+code-blocks/*/*.depend
+code-blocks/*/*.layout
+code-blocks/*/gmon.out
+code-blocks/*/bin/*
+code-blocks/*/*.cookie
+code-blocks/*/*.exe
+code-blocks/*/imgui.ini
+code-blocks/*/pch.hpp.gch
+code-blocks/examples/storage/*

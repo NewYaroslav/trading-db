@@ -11,7 +11,7 @@
 #include "utility/async-tasks.hpp"
 #include "utility/print.hpp"
 #include "utility/files.hpp"
-#include <xtime.hpp>
+#include <ztime.hpp>
 #include <mutex>
 #include <atomic>
 #include <future>
@@ -26,10 +26,10 @@ namespace trading_db {
 
         class Config {
         public:
-            const std::string title = "trading_db::BetDatabase ";
-            int busy_timeout    = 0;    /**< Время ожидания БД */
-            double idle_time    = 15;   /**< Время бездействия записи */
-            int threshold_bets = 100;   /**< Порог срабатывания по количеству сделок */
+            const std::string title   = "trading_db::BetDatabase ";
+            size_t busy_timeout       = 0;      /**< Время ожидания БД */
+            double idle_time          = 15;     /**< Время бездействия записи */
+            size_t threshold_bets     = 100;    /**< Порог срабатывания по количеству сделок */
             std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
         };
 
@@ -121,15 +121,18 @@ namespace trading_db {
         // уникальный номер сделки
 		int64_t last_bet_uid = 0;
         std::mutex last_bet_uid_mutex;
+        // для очистки буфера
+        std::atomic<bool> is_flush = ATOMIC_VAR_INIT(false);
+        // для методов
+        std::mutex method_mutex;
 
         utility::AsyncTasks async_tasks;
 
-		inline void print_error(const std::string message) noexcept {
+		inline void print_error(const std::string message, const int line) noexcept {
             if (config.use_log) {
                 TRADING_DB_TICK_DB_PRINT
                     << config.title << "error in [file " << __FILE__
-                    << ", line " << __LINE__
-                    << ", func " << __FUNCTION__
+                    << ", line " << line
                     << "], message: " << message << std::endl;
             }
 		}
@@ -141,7 +144,7 @@ namespace trading_db {
                 (SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :
                 (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX);
             if(sqlite3_open_v2(db_name.c_str(), &sqlite_db_ptr, flags, nullptr) != SQLITE_OK) {
-                print_error("sqlite3_open_v2 error, db name " + db_name);
+                print_error("sqlite3_open_v2 error, db name " + db_name, __LINE__);
                 return false;
             }
             sqlite3_busy_timeout(sqlite_db_ptr, config.busy_timeout);
@@ -268,39 +271,39 @@ namespace trading_db {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].delay)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].delay)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].ping)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].ping)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].duration)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].duration)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].step)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].step)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].demo)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].demo)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].last)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].last)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].contract_type)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].contract_type)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].status)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].status)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
-                if (sqlite3_bind_int(stmt.get(), index++, static_cast<sqlite3_int>(buffer[i].type)) != SQLITE_OK) {
+                if (sqlite3_bind_int(stmt.get(), index++, static_cast<int>(buffer[i].type)) != SQLITE_OK) {
                     transaction.rollback();
                     return false;
                 }
@@ -337,11 +340,11 @@ namespace trading_db {
                 } else
                 if(err == SQLITE_BUSY) {
                     transaction.rollback();
-                    print_error("sqlite3_step return SQLITE_BUSY");
+                    print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                     return false;
                 } else {
                     transaction.rollback();
-                    print_error("sqlite3_step return " + std::to_string(err) + ", message " + std::string(sqlite3_errmsg(sqlite_db)));
+                    print_error("sqlite3_step return " + std::to_string(err) + ", message " + std::string(sqlite3_errmsg(sqlite_db)), __LINE__);
                     return false;
                 }
             }
@@ -356,10 +359,15 @@ namespace trading_db {
 
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
-                    print_error("sqlite3_reset return code " + std::to_string(err));
+                    print_error("sqlite3_reset return code " + std::to_string(err), __LINE__);
                     return T();
                 }
                 err = sqlite3_step(stmt.get());
+                if(err == SQLITE_DONE) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    return T();
+                } else
                 if(err == SQLITE_BUSY) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
@@ -369,7 +377,7 @@ namespace trading_db {
                 if (err != SQLITE_ROW) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
-                    print_error("sqlite3_step return code " + std::to_string(err));
+                    print_error("sqlite3_step return code " + std::to_string(err), __LINE__);
                     return T();
                 }
 
@@ -378,7 +386,7 @@ namespace trading_db {
                     typename T::value_type bet_data;
 
                     size_t index = 0;
-                    bet_data.id 			= sqlite3_column_int64(stmt.get(), index++);
+                    bet_data.uid 			= sqlite3_column_int64(stmt.get(), index++);
                     bet_data.broker_id 		= sqlite3_column_int64(stmt.get(), index++);
 
                     bet_data.open_date 		= sqlite3_column_double(stmt.get(), index++);
@@ -391,11 +399,12 @@ namespace trading_db {
                     bet_data.profit 		= sqlite3_column_double(stmt.get(), index++);
                     bet_data.payout 		= sqlite3_column_double(stmt.get(), index++);
 
-                    bet_data.delay 			= sqlite3_column_double(stmt.get(), index++);
-                    bet_data.ping 			= sqlite3_column_double(stmt.get(), index++);
+                    bet_data.delay 			= sqlite3_column_int(stmt.get(), index++);
+                    bet_data.ping 			= sqlite3_column_int(stmt.get(), index++);
 
-                    bet_data.duration 		= static_cast<uint32_t>sqlite3_column_int(stmt.get(), index++);
-                    bet_data.step 			= static_cast<uint32_t>sqlite3_column_int(stmt.get(), index++);
+                    bet_data.duration 		= static_cast<uint32_t>(sqlite3_column_int(stmt.get(), index++));
+                    bet_data.step 			= static_cast<uint32_t>(sqlite3_column_int(stmt.get(), index++));
+
                     bet_data.demo 			= static_cast<bool>(sqlite3_column_int(stmt.get(), index++));
                     bet_data.last 			= static_cast<bool>(sqlite3_column_int(stmt.get(), index++));
 
@@ -428,7 +437,7 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     buffer.clear();
-                    print_error("sqlite3_step return SQLITE_BUSY");
+                    print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     continue;
                 }
@@ -453,11 +462,14 @@ namespace trading_db {
                     // проверяем наличие данных для записи
                     if (write_buffer_size == 0) {
                         timer.reset();
+                        is_flush = false;
                         std::this_thread::sleep_for(std::chrono::milliseconds(1));
                         continue;
                     }
                     // проверяем условия для начала записи
-                    if (idle_time < config.idle_time && write_buffer_size < config.threshold_bets)  {
+                    if (idle_time < config.idle_time &&
+                        write_buffer_size < config.threshold_bets &&
+                        !is_flush)  {
                         std::this_thread::sleep_for(std::chrono::milliseconds(1));
                         continue;
                     }
@@ -475,6 +487,8 @@ namespace trading_db {
                     }
                     // запишем данные
                     replace_db(buffer, sqlite_transaction, stmt_replace_bet);
+                    timer.reset();
+                    is_flush = false;
                 }
             });
         }
@@ -531,41 +545,50 @@ namespace trading_db {
             }
         };
 
-        template<class T>
-        inline bool check_in_list(const T &list_num) {
+        /** \brief Проверить список на наличие указанного числа
+         */
+        template<class T1, class T2>
+        inline bool check_list(
+                const T1 &list_num,
+                const bool is_not,
+                const T2 num) noexcept {
             if (!list_num.empty()) {
-                const uint32_t weekday = ztime::get_weekday(timestamp);
-                bool nofilter = false;
-                for (size_t k = 0; k < list_num.size(); ++k) {
-                    if (request.weekday[k] == weekday) {
-                        nofilter = true;
-                        break;
-                    }
+                for (size_t i = 0; i < list_num.size(); ++i) {
+                    if (list_num[i] == num) return !is_not;
                 }
-                return nofilter;
+                return is_not;
             }
+            return true;
         }
 
 	public:
+
+        BetDatabase() {};
 
         /** \brief Конструктор хранилища тиков
          * \param path      Путь к файлу
          * \param readonly  Флаг 'только чтение'
          */
-		BetDatabase(const std::string &path, const bool readonly = false) :
-            database_name(path) {
-            if (init_db(path, readonly)) {
-                main_task();
-            }
+		BetDatabase(const std::string &path, const bool readonly = false) {
+            init(path, readonly);
 		}
 
 		~BetDatabase() {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            is_flush = true;
+            while (is_flush) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
             is_shutdown = true;
             async_tasks.clear();
-            std::lock_guard<std::mutex> lock(method_mutex);
             if (sqlite_db != nullptr) sqlite3_close_v2(sqlite_db);
 		}
 
+        /** \brief Инициализировать БД
+         * \param path      Путь к файлу БД
+         * \param readonly  Флаг 'только чтение'
+         * \return Вернет true в случае успешной инициализации
+         */
 		bool init(const std::string &path, const bool readonly = false) {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (check_init_db()) return false;
@@ -591,7 +614,7 @@ namespace trading_db {
          * \param bet_data  Данные ставки
          * \return Вернет true, если ставка была добавлена в очередь назапись в БД
          */
-		bool replace(BetData &bet_data) noexcept {
+		bool replace_bet(BetData &bet_data) noexcept {
 			{
                 std::lock_guard<std::mutex> lock(method_mutex);
                 if (!check_init_db()) return false;
@@ -600,16 +623,27 @@ namespace trading_db {
 			if (bet_data.open_date <= 0) return false;
             if (bet_data.uid <= 0) bet_data.uid = get_bet_uid();
 			std::lock_guard<std::mutex> lock(write_buffer_mutex);
-			write_buffer.push_back(data);
+			write_buffer.push_back(bet_data);
 			return true;
 		}
 
-		/** \brief Параметры запроса ставок из БД
+        /** \brief Очистить поток записи
+         * Данный блокирующий метод принуждает БД провести запись данных немедленно
+         */
+        inline void flush() noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            is_flush = true;
+            while (is_flush && !is_shutdown) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+		}
+
+		/** \brief Параметры запроса для выгрузки ставок из БД
          */
 		class RequestConfig {
 		public:
-			int64_t start_date  = 0;	                /// Начальная дата запроса, в мс
-			int64_t stop_date 	= 0;	                /// Конечная дата запроса, в мс
+			int64_t start_date   = 0;	                /// Начальная дата запроса, в мс
+			int64_t stop_date 	 = 0;	                /// Конечная дата запроса, в мс
 			std::vector<std::string>	brokers;	    /// Список брокеров. Если пусто, то не фильтруется
 			std::vector<std::string>	no_brokers;     /// Список запрещенных брокеров. Если пусто, то не фильтруется
 			std::vector<std::string> 	symbols;	    /// Список символов. Если пусто, то не фильтруется
@@ -622,8 +656,23 @@ namespace trading_db {
 			std::vector<uint32_t> 	 	no_hours;       /// Список запрещенных торговых часов. Если пусто, то не фильтруется
 			std::vector<uint32_t>	 	weekday;	    /// Список торговых дней недели. Если пусто, то не фильтруется
 			std::vector<uint32_t>	 	no_weekday;	    /// Список запрещенных торговых дней недели. Если пусто, то не фильтруется
-			uint32_t start_time = 0;	                /// Начальное время торговли
-			uint32_t stop_time = 0;		                /// Конечное время торговли
+			uint32_t start_time  = 0;	                /// Начальное время торговли
+			uint32_t stop_time   = 0;                   /// Конечное время торговли
+
+            double min_amount    = 0;	                /// Минимальный размер ставки
+            double max_amount 	 = 0;	                /// Максимальный размер ставки
+            double min_payout 	 = 0;	                /// Минимальный процент выплат
+            double max_payout 	 = 0;	                /// Максимальный процент выплат
+			int64_t min_ping 	 = 0; 	                /// Минимальный пинг запроса на открытие ставки в миллисекундах
+			int64_t max_ping 	 = 0; 	                /// Максимальный пинг запроса на открытие ставки в миллисекундах
+
+			bool only_last       = false;               /// Использовать только последние сделки в цепочке (актуально для мартингейла)
+			bool only_result     = false;               /// Использовать только сделки с результатом
+			bool use_buy         = true;                /// Использовать сделки BUY
+            bool use_sell        = true;                /// Использовать сделки SELL
+            bool use_demo        = true;                /// Использовать сделки на DEMO
+            bool use_real        = true;                /// Использовать сделки на REAL
+
 		};
 
 		/** \brief Получить данные из БД
@@ -631,7 +680,7 @@ namespace trading_db {
          * \return Вернет массив ставок, если есть. Если массив пустой, то данных удовлетворяющих запросу нет
          */
 		template<class T>
-		inline T get(const RequestConfig &request) noexcept {
+		inline T get_bets(const RequestConfig &request) noexcept {
 			{
                 std::lock_guard<std::mutex> lock(method_mutex);
                 if (!check_init_db()) return T();
@@ -639,11 +688,11 @@ namespace trading_db {
 			// формируем запрос
 			std::string request_str("SELECT * FROM 'Bets' WHERE");
 			int counter_args = 0; //  счетчик аргументов
-			if (request.start_date != 0) {
+			if (request.start_date) {
 				request_str += " open_date >= " + std::to_string(request.start_date);
 				++counter_args;
 			}
-			if (request.stop_date != 0) {
+			if (request.stop_date) {
 				if (counter_args) request_str += " AND ";
 				request_str += " open_date <= " + std::to_string(request.stop_date);
 				++counter_args;
@@ -657,109 +706,112 @@ namespace trading_db {
 			add_list_str_arg_req(request.no_signals, "signal", true, counter_args, request_str);
             add_list_num_arg_req(request.durations, "duration", false, counter_args, request_str);
             add_list_num_arg_req(request.no_durations, "duration", true, counter_args, request_str);
-			request_str += " ORDER BY id ASC";
+
+            if (counter_args == 0) request_str += " open_date >= 0";
+			request_str += " ORDER BY open_date ASC";
+
 			// подготавливаем запрос
 			utility::SqliteStmt stmt;
-			stmt.init(sqlite_db, request_str.c_str());
+			stmt.init(sqlite_db, request_str);
             // получаем данные
-			T buffer(get_bets_db(stmt));
-
+			T buffer(get_bets_db<T>(stmt));
 			// проводим оставшуюся фильтрацию
 			size_t index = 0;
 			while (index < buffer.size()) {
 				// получаем метку времени
 				const uint64_t timestamp = buffer[index].open_date / ztime::MILLISECONDS_IN_SECOND;
-
-				// фильтруем по дням недели
-				if (!request.weekday.empty()) {
-					const uint32_t weekday = ztime::get_weekday(timestamp);
-					bool nofilter = false;
-					for (size_t k = 0; k < request.weekday.size(); ++k) {
-						if (request.weekday[k] == weekday) {
-							nofilter = true;
-							break;
-						}
-					}
-					if (!nofilter) {
-                        buffer.erase(buffer.begin() + index);
-                        ++index;
-                        continue;
-					}
-				}
-				if (!request.no_weekday.empty()) {
-					const uint32_t weekday = ztime::get_weekday(timestamp);
-					bool nofilter = true;
-					for (size_t k = 0; k < request.no_weekday.size(); ++k) {
-						if (request.no_weekday[k] == weekday) {
-							nofilter = false;
-							break;
-						}
-					}
-					if (!nofilter) {
-                        buffer.erase(buffer.begin() + index);
-                        ++index;
-                        continue;
-					}
-				}
-
-
+                const uint32_t hour = ztime::get_hour_day(timestamp);
 				const uint32_t weekday = ztime::get_weekday(timestamp);
 
-				// проверяем, была ли команда на удаление
-				if (!nofilter) {
-					buffer.erase(buffer.begin() + index);
-					++index;
-					continue;
-				}
-				const uint64_t timestamp = buffer[index].open_date / ztime::MILLISECONDS_IN_SECOND;
-
-				nofilter = false;
-				if (!request.weekday.empty()) {
-					const uint32_t weekday = xtime::get_weekday(timestamp_ms/1000);
-					for (size_t k = 0; k < request.weekday.size(); ++k) {
-						if (request.weekday[k] == weekday) {
-							nofilter = true;
-							break;
-						}
-					}
-				} else {
-					nofilter = true;
-				}
-				if (!nofilter) continue;
-				nofilter = false;
-				if (!request.hours.empty()) {
-					const uint32_t hour = xtime::get_hour_day(timestamp_ms/1000);
-					for (size_t k = 0; k < request.hours.size(); ++k) {
-						if (request.hours[k] == hour) {
-							nofilter = true;
-							break;
-						}
-					}
-				} else {
-					nofilter = true;
+				if (!check_list(request.weekday, false, weekday) ||     // фильтруем по дням недели
+                    !check_list(request.no_weekday, true, weekday) ||   // фильтруем по дням недели
+                    !check_list(request.hours, false, hour) ||          // фильтруем по часам
+                    !check_list(request.no_hours, true, hour) ||        // фильтруем по часам
+                    !check_list(request.durations, false, buffer[index].duration) ||    // фильтруем по часам
+                    !check_list(request.no_durations, true, buffer[index].duration)) {  // фильтруем по часам
+                    buffer.erase(buffer.begin() + index);
+                    ++index;
+                    continue;
 				}
 
-				if (!nofilter) continue;
-				nofilter = false;
-
-				if (request.start_time) {
-					const uint32_t second_day = xtime::get_second_day(timestamp_ms/1000);
-					if (request.start_time <= second_day) nofilter = true;
-				} else {
-					nofilter = true;
+				if (request.start_time || request.stop_time) {
+                    const uint32_t second_day = ztime::get_second_day(timestamp);
+                    if ((request.start_time && request.start_time > second_day) ||
+                       (request.stop_time && request.stop_time < second_day)){
+                       buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
 				}
 
-				if (!nofilter) continue;
-				nofilter = false;
-
-				if (request.stop_time) {
-					const uint32_t second_day = xtime::get_second_day(timestamp_ms/1000);
-					if (request.stop_time >= second_day) nofilter = true;
-				} else {
-					nofilter = true;
+				if (request.min_amount || request.max_amount) {
+                    if ((request.min_amount && request.min_amount > buffer[index].amount) ||
+                       (request.max_amount && request.max_amount < buffer[index].amount)){
+                       buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
 				}
 
-				if (!nofilter) continue;
+				if (request.min_payout || request.max_payout) {
+                    if ((request.min_payout && request.min_payout > buffer[index].payout) ||
+                       (request.max_payout && request.max_payout < buffer[index].payout)){
+                       buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
+				}
+
+				if (request.min_ping || request.max_ping) {
+                    if ((request.min_ping && request.min_ping > buffer[index].ping) ||
+                       (request.max_ping && request.max_ping < buffer[index].ping)){
+                       buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
+				}
+
+				if (request.only_last) {
+                    if (!buffer[index].last) {
+                        buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
+				}
+
+				if (request.only_result) {
+                    if (buffer[index].status != BetStatus::WIN &&
+                        buffer[index].status != BetStatus::LOSS &&
+                        buffer[index].status != BetStatus::STANDOFF) {
+                        buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
+				}
+
+				if (request.only_result) {
+                    if (buffer[index].status != BetStatus::WIN &&
+                        buffer[index].status != BetStatus::LOSS &&
+                        buffer[index].status != BetStatus::STANDOFF) {
+                        buffer.erase(buffer.begin() + index);
+                        ++index;
+                        continue;
+                    }
+				}
+
+				if ((!request.use_buy && buffer[index].contract_type == ContractTypes::BUY) ||
+                   (!request.use_sell && buffer[index].contract_type == ContractTypes::SELL)) {
+                    buffer.erase(buffer.begin() + index);
+                    ++index;
+                    continue;
+				}
+
+				if ((!request.use_real && !buffer[index].demo) ||
+                   (!request.use_demo && buffer[index].demo)) {
+                    buffer.erase(buffer.begin() + index);
+                    ++index;
+                    continue;
+				}
 				++index;
 			}
 			return std::move(buffer);
@@ -780,13 +832,7 @@ namespace trading_db {
             async_tasks.create_task([&, path]() {
                 if (!utility::backup_form_db(path, this->sqlite_db)) {
                     callback(path, true);
-                    if (config.use_log) {
-                        TRADING_DB_TICK_DB_PRINT
-                            << "trading_db::BetDatabase error in [file "
-                            << __FILE__ << ", line "
-                            << __LINE__ << ", func "
-                            << __FUNCTION__ << "], message: backup return false" << std::endl;
-                    }
+                    print_error("backup return false", __LINE__);
                 } else {
                     callback(path, false);
                 }
@@ -800,9 +846,51 @@ namespace trading_db {
 
         /** \brief Очистить все данные
          */
-		inline bool clear() {
-            std::lock_guard<std::mutex> lock(stmt_mutex);
+        inline bool remove_all() {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
             return utility::prepare(sqlite_db, "DELETE FROM 'Bets'");
+        }
+
+        /** \brief Удалить сделку
+		 * \param BetData Заполненная структура сделки для удаления
+         */
+		inline bool remove_bet(const BetData &bet_data) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            return utility::prepare(sqlite_db,
+                "DELETE FROM 'Bets' WHERE open_date == " +
+                std::to_string(bet_data.open_date) +
+                " AND uid == " +
+                std::to_string(bet_data.uid));
+		}
+
+		/** \brief Удалить сделку по UID
+		 * \param uid   Уникальный номер сделки в БД
+         */
+		inline bool remove_bet(const int64_t uid) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            return utility::prepare(sqlite_db,
+                "DELETE FROM 'Bets' WHERE uid == " +
+                std::to_string(uid));
+		}
+
+        /** \brief Удалить значения по ключам
+		 * \param keys  Массив ключей элементов списка
+         */
+        template<class T>
+		inline bool remove_bets(const T &keys) noexcept {
+            std::lock_guard<std::mutex> lock(method_mutex);
+            if (!check_init_db()) return false;
+            if (keys.empty()) return false;
+            std::string message("DELETE FROM 'Bets' WHERE key IN (");
+            for (auto it = keys.begin(); it != keys.end(); ++it) {
+                if (it != keys.begin()) message += ",";
+                message += *it;
+            }
+            message += ")";
+            return utility::prepare(sqlite_db, message);
 		}
 	};
 

@@ -36,7 +36,7 @@
 				</Linker>
 			</Target>
 			<Target title="example-key-value-db">
-				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
+				<Option output="example-key-value-db" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -63,7 +63,7 @@
 				</Linker>
 			</Target>
 			<Target title="example-int-key-blob-value-db">
-				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
+				<Option output="example-int-key-blob-value-db" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -90,7 +90,7 @@
 				</Linker>
 			</Target>
 			<Target title="example-compact-candles-dataset">
-				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
+				<Option output="example-compact-candles-dataset" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -117,7 +117,7 @@
 				</Linker>
 			</Target>
 			<Target title="example-bet-db">
-				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
+				<Option output="example-bet-db" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />

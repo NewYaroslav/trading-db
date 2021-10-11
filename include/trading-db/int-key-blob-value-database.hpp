@@ -66,12 +66,13 @@ namespace trading_db {
 
 		utility::AsyncTasks async_tasks;
 
-		inline void print_error(const std::string message) noexcept {
+		inline void print_error(
+                const std::string message,
+                const int line) noexcept {
             if (config.use_log) {
                 TRADING_DB_TICK_DB_PRINT
                     << config.title << "error in [file " << __FILE__
-                    << ", line " << __LINE__
-                    << ", func " << __FUNCTION__
+                    << ", line " << line
                     << "], message: " << message << std::endl;
             }
 		}
@@ -88,7 +89,8 @@ namespace trading_db {
             if(sqlite3_open_v2(db_name.c_str(), &sqlite_db_ptr, flags, nullptr) != SQLITE_OK) {
                 sqlite3_close_v2(sqlite_db_ptr);
                 sqlite_db_ptr = nullptr;
-                print_error(std::string(sqlite3_errmsg(sqlite_db_ptr)) + ", db name " + db_name);
+                print_error(std::string(sqlite3_errmsg(sqlite_db_ptr)) +
+                    ", db name " + db_name, __LINE__);
                 return false;
             } else {
                 sqlite3_busy_timeout(sqlite_db_ptr, config.busy_timeout);
@@ -99,7 +101,7 @@ namespace trading_db {
                     "value              BLOB                NOT NULL)";
 
                 if (!utility::prepare(sqlite_db_ptr, create_key_value_table_sql)) {
-                    print_error("utility::prepare return false");
+                    print_error("utility::prepare return false", __LINE__);
                     return false;
                 }
             }
@@ -120,7 +122,7 @@ namespace trading_db {
                 !stmt_get_all_key_value.init(sqlite_db, "SELECT value FROM '" + config.table + "'")) {
                 sqlite3_close_v2(sqlite_db);
                 sqlite_db = nullptr;
-                print_error("stmt init return false");
+                print_error("stmt init return false", __LINE__);
                 return false;
             }
             return true;
@@ -147,11 +149,12 @@ namespace trading_db {
             if(err == SQLITE_BUSY) {
                 // Если оператор не является COMMIT и встречается в явной транзакции, вам следует откатить транзакцию, прежде чем продолжить.
                 transaction.rollback();
-                print_error("sqlite3_step return SQLITE_BUSY");
+                print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                 return false;
             } else {
                 transaction.rollback();
-                print_error(std::string(sqlite3_errmsg(sqlite_db)) + ", code " + std::to_string(err));
+                print_error(std::string(sqlite3_errmsg(sqlite_db)) +
+                    ", code " + std::to_string(err), __LINE__);
                 return false;
             }
             if (!transaction.commit()) return false;
@@ -182,11 +185,12 @@ namespace trading_db {
                 } else
                 if(err == SQLITE_BUSY) {
                     transaction.rollback();
-                    print_error("sqlite3_step return SQLITE_BUSY");
+                    print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                     return false;
                 } else {
                     transaction.rollback();
-                    print_error(std::string(sqlite3_errmsg(sqlite_db)) + ", code " + std::to_string(err));
+                    print_error(std::string(sqlite3_errmsg(sqlite_db)) +
+                        ", code " + std::to_string(err), __LINE__);
                     return false;
                 }
             }
@@ -200,14 +204,19 @@ namespace trading_db {
             int err = 0;
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
-                    print_error("sqlite3_reset return code " + std::to_string(err));
+                    print_error("sqlite3_reset return code " + std::to_string(err), __LINE__);
                     return T();
                 }
                 if (sqlite3_bind_int64(stmt.get(), 1, key) != SQLITE_OK) {
-                    print_error("sqlite3_bind_text error");
+                    print_error("sqlite3_bind_text error", __LINE__);
                     return T();
                 }
                 err = sqlite3_step(stmt.get());
+                if(err == SQLITE_DONE) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    return T();
+                } else
                 if(err == SQLITE_BUSY) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
@@ -217,6 +226,7 @@ namespace trading_db {
                 if (err != SQLITE_ROW) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
+                    print_error("sqlite3_step return code " + std::to_string(err), __LINE__);
                     return T();
                 }
 
@@ -237,7 +247,7 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     value = T();
-                    print_error("sqlite3_step return SQLITE_BUSY");
+                    print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     continue;
                 }
@@ -252,10 +262,16 @@ namespace trading_db {
             int err = 0;
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
-                    print_error("sqlite3_reset return code " + std::to_string(err));
+                    print_error("sqlite3_reset return code " +
+                        std::to_string(err), __LINE__);
                     return T();
                 }
                 err = sqlite3_step(stmt.get());
+                if(err == SQLITE_DONE) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    return T();
+                } else
                 if(err == SQLITE_BUSY) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
@@ -290,7 +306,7 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     buffer.clear();
-                    print_error("sqlite3_step return SQLITE_BUSY");
+                    print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     continue;
                 }
@@ -304,10 +320,15 @@ namespace trading_db {
             int err = 0;
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
-                    print_error("sqlite3_reset return code " + std::to_string(err));
+                    print_error("sqlite3_reset return code " + std::to_string(err), __LINE__);
                     return std::move(buffer);
                 }
                 err = sqlite3_step(stmt.get());
+                if(err == SQLITE_DONE) {
+                    sqlite3_reset(stmt.get());
+                    sqlite3_clear_bindings(stmt.get());
+                    return std::move(buffer);
+                } else
                 if(err == SQLITE_BUSY) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
@@ -317,6 +338,7 @@ namespace trading_db {
                 if (err != SQLITE_ROW) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
+                    print_error("sqlite3_step return code " + std::to_string(err), __LINE__);
                     return std::move(buffer);
                 }
 
@@ -339,7 +361,7 @@ namespace trading_db {
                         break;
                     } else
                     if(err == SQLITE_BUSY) {
-                        print_error("sqlite3_step return SQLITE_BUSY");
+                        print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                         break;
                     }
                 }
@@ -347,7 +369,7 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     buffer.clear();
-                    print_error("sqlite3_step return SQLITE_BUSY");
+                    print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     continue;
                 }
@@ -404,7 +426,7 @@ namespace trading_db {
             async_tasks.create_task([&, path]() {
                 if (!utility::backup_form_db(path, this->sqlite_db)) {
                     callback(path, true);
-                    print_error("backup return false");
+                    print_error("backup return false", __LINE__);
                 } else {
                     callback(path, false);
                 }
@@ -552,7 +574,7 @@ namespace trading_db {
 		 * \param pairs     Массив пар "ключ-значение"
          */
         template<class T>
-		inline bool remove_pairs(const T &pairs) noexcept {
+        inline bool remove_pairs(const T &pairs) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
             if (pairs.empty()) return false;
@@ -564,7 +586,7 @@ namespace trading_db {
             message += ")";
             return utility::prepare(sqlite_db, message);
 		}
-	};
+    };
 
 }; // trading_db
 
