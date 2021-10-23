@@ -22,7 +22,7 @@ int main() {
         std::uniform_int_distribution<int> dist_amount(1,700);
         std::uniform_int_distribution<int> dist_broker(0,1);
         std::uniform_int_distribution<int> dist_timestamp(60,3600);
-        std::uniform_int_distribution<int> dist_duration(60,30*60);
+        std::uniform_int_distribution<int> dist_duration(1,30);
         std::uniform_int_distribution<int> dist_contract_type(0,1);
         std::uniform_int_distribution<int> dist_currency(0, 1);
         std::uniform_int_distribution<int> dist_winrate(1,100);
@@ -48,7 +48,7 @@ int main() {
             timestamp += dist_timestamp(rng);
 
             bet.open_date = timestamp;
-            bet.duration = dist_duration(rng);
+            bet.duration = 60 * dist_duration(rng);
             bet.close_date = bet.open_date + bet.duration;
 
             bet.comment = "test";
@@ -154,9 +154,11 @@ int main() {
         std::cout << "#get_bets" << std::endl;
 
         trading_db::BetDatabase::RequestConfig req_config;
+        req_config.use_real = false;
+        req_config.use_demo = false;
         std::vector<bet_t> read_bets = bet_db.get_bets<std::vector<bet_t>>(req_config);
 
-        if (0)
+        if (1)
         for (auto bet : read_bets) {
             std::cout << "--------------------------------------" << std::endl;
             std::cout <<  "uid "             << bet.uid               << std::endl;

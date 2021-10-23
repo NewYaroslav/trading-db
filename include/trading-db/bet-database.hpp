@@ -35,6 +35,7 @@ namespace trading_db {
 			double meta_data_time	  = 5;		/**< Время обновления мета данных */
 			size_t busy_timeout		  = 0;		/**< Время ожидания БД */
 			size_t threshold_bets	  = 100;	/**< Порог срабатывания по количеству сделок */
+			std::atomic<bool> read_only = ATOMIC_VAR_INIT(false);
 			std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
 		};
 
@@ -211,6 +212,7 @@ namespace trading_db {
 		}
 
 		bool init_db(const std::string &db_name, const bool readonly = false) {
+			config.read_only = readonly;
 			if (!open_db(sqlite_db, db_name, readonly)) {
 				sqlite3_close_v2(sqlite_db);
 				sqlite_db = nullptr;
@@ -569,12 +571,15 @@ namespace trading_db {
 		// основная задача (запись данных вБД) для фонового процесса
 		void main_task() {
 			const std::string value = get_meta_data_db(stmt_get_meta_data, "update-timestamp").value;
-			if (!value.empty()) last_update_timestamp = std::stoll(value);
-			else {
+			if (!value.empty()) {
+                last_update_timestamp = std::stoll(value);
+			} else if (!config.read_only) {
 				// запишем мета-данные
 				last_update_timestamp = ztime::get_timestamp();
 				MetaData meta_data("update-timestamp", std::to_string((uint64_t)last_update_timestamp));
 				replace_db(meta_data, sqlite_transaction, stmt_replace_meta_data);
+			} else {
+                last_update_timestamp = ztime::get_timestamp();
 			}
 			async_tasks.create_task([&]() {
 				ztime::Timer timer;
@@ -585,6 +590,11 @@ namespace trading_db {
 						timer_meta_data.reset();
 						const std::string value = get_meta_data_db(stmt_get_meta_data, "update-timestamp").value;
 						if (!value.empty()) last_update_timestamp = std::stoll(value);
+						std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					}
+					if (config.read_only) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+						continue;
 					}
 					// получаем размер буфера для записи
 					size_t write_buffer_size = 0;
@@ -760,6 +770,7 @@ namespace trading_db {
 		 * \return Вернет true, если ставка была добавлена в очередь назапись в БД
 		 */
 		bool replace_bet(BetData &bet_data) noexcept {
+			if (config.read_only) return false;
 			{
 				std::lock_guard<std::mutex> lock(method_mutex);
 				if (!check_init_db()) return false;
@@ -776,6 +787,7 @@ namespace trading_db {
 		 * Данный блокирующий метод принуждает БД провести запись данных немедленно
 		 */
 		inline void flush() noexcept {
+			if (config.read_only) return;
 			std::lock_guard<std::mutex> lock(method_mutex);
 			is_flush = true;
 			while (is_flush && !is_shutdown) {
@@ -879,7 +891,6 @@ namespace trading_db {
 					!check_list(request.durations, false, buffer[index].duration) ||	// фильтруем по часам
 					!check_list(request.no_durations, true, buffer[index].duration)) {	// фильтруем по часам
 					buffer.erase(buffer.begin() + index);
-					++index;
 					continue;
 				}
 
@@ -887,8 +898,7 @@ namespace trading_db {
 					const uint32_t second_day = ztime::get_second_day(timestamp);
 					if ((request.start_time && request.start_time > second_day) ||
 					   (request.stop_time && request.stop_time < second_day)){
-					   buffer.erase(buffer.begin() + index);
-						++index;
+                        buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -896,8 +906,7 @@ namespace trading_db {
 				if (request.min_amount || request.max_amount) {
 					if ((request.min_amount && request.min_amount > buffer[index].amount) ||
 					   (request.max_amount && request.max_amount < buffer[index].amount)){
-					   buffer.erase(buffer.begin() + index);
-						++index;
+                        buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -905,8 +914,7 @@ namespace trading_db {
 				if (request.min_payout || request.max_payout) {
 					if ((request.min_payout && request.min_payout > buffer[index].payout) ||
 					   (request.max_payout && request.max_payout < buffer[index].payout)){
-					   buffer.erase(buffer.begin() + index);
-						++index;
+                        buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -914,8 +922,7 @@ namespace trading_db {
 				if (request.min_ping || request.max_ping) {
 					if ((request.min_ping && request.min_ping > buffer[index].ping) ||
 					   (request.max_ping && request.max_ping < buffer[index].ping)){
-					   buffer.erase(buffer.begin() + index);
-						++index;
+                        buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -923,7 +930,6 @@ namespace trading_db {
 				if (request.only_last) {
 					if (!buffer[index].last) {
 						buffer.erase(buffer.begin() + index);
-						++index;
 						continue;
 					}
 				}
@@ -933,7 +939,6 @@ namespace trading_db {
 						buffer[index].status != BetStatus::LOSS &&
 						buffer[index].status != BetStatus::STANDOFF) {
 						buffer.erase(buffer.begin() + index);
-						++index;
 						continue;
 					}
 				}
@@ -943,7 +948,6 @@ namespace trading_db {
 						buffer[index].status != BetStatus::LOSS &&
 						buffer[index].status != BetStatus::STANDOFF) {
 						buffer.erase(buffer.begin() + index);
-						++index;
 						continue;
 					}
 				}
@@ -951,14 +955,12 @@ namespace trading_db {
 				if ((!request.use_buy && buffer[index].contract_type == ContractTypes::BUY) ||
 				   (!request.use_sell && buffer[index].contract_type == ContractTypes::SELL)) {
 					buffer.erase(buffer.begin() + index);
-					++index;
 					continue;
 				}
 
 				if ((!request.use_real && !buffer[index].demo) ||
 				   (!request.use_demo && buffer[index].demo)) {
 					buffer.erase(buffer.begin() + index);
-					++index;
 					continue;
 				}
 				++index;
