@@ -143,6 +143,33 @@
 					<Add directory="../../include" />
 				</Linker>
 			</Target>
+			<Target title="example-bet-db-generation-test-trades">
+				<Option output="example-bet-db" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../include" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../include" />
+				</Linker>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -150,6 +177,7 @@
 		</Compiler>
 		<Unit filename="../../include/trading-db/bet-database.hpp">
 			<Option target="example-bet-db" />
+			<Option target="example-bet-db-generation-test-trades" />
 		</Unit>
 		<Unit filename="../../include/trading-db/config.hpp" />
 		<Unit filename="../../include/trading-db/int-key-blob-value-database.hpp" />
@@ -176,6 +204,9 @@
 		<Unit filename="../../lib/ztime-cpp/src/ztime.cpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime.hpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime_ntp.hpp" />
+		<Unit filename="example-bet-db-generation-test.cpp">
+			<Option target="example-bet-db-generation-test-trades" />
+		</Unit>
 		<Unit filename="example-bet-db.cpp">
 			<Option target="example-bet-db" />
 		</Unit>
