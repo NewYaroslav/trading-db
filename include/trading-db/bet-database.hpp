@@ -1489,6 +1489,7 @@ namespace trading_db {
 		class MetaBetStats {
 		public:
 			std::vector<std::string>	brokers;
+			std::vector<std::string>	symbols;
 			std::vector<std::string>	signals;
 			std::vector<std::string>	currencies;
 			bool						real		= false;
@@ -1499,16 +1500,19 @@ namespace trading_db {
 				std::set<std::string> calc_currencies;
 				std::set<std::string> calc_brokers;
 				std::set<std::string> calc_signals;
+				std::set<std::string> calc_symbols;
 				for (auto &bet : bets) {
 					calc_currencies.insert(bet.currency);
 					calc_brokers.insert(bet.broker);
 					calc_signals.insert(bet.signal);
+					calc_symbols.insert(bet.symbol);
 					if (bet.demo) demo = true;
 					else real  = true;
 				}
 				brokers = std::vector<std::string>(calc_brokers.begin(), calc_brokers.end());
 				currencies = std::vector<std::string>(calc_currencies.begin(), calc_currencies.end());
 				signals = std::vector<std::string>(calc_signals.begin(), calc_signals.end());
+				symbols = std::vector<std::string>(calc_symbols.begin(), calc_symbols.end());
 			}
 		}; // MetaBetStats
 	};
