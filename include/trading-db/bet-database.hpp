@@ -1273,7 +1273,12 @@ namespace trading_db {
 			}
 
 			void clear() noexcept {
+				temp_balance.clear();
+
 				stats_symbol.clear();
+				stats_temp_counter_bet.clear();
+				counter_bet_timestamp = 0;
+                counter_bet = 1;
 
 				// статистика по периодам
 				stats_year.clear();
@@ -1316,7 +1321,7 @@ namespace trading_db {
 			void calc(const T &bets, const double start_balance) noexcept {
 				clear();
 
-				size_t counter_aver_profit		= 0;
+				size_t counter_aver_profit = 0;
 				double profit = 0;
 
 				for (auto &bet : bets) {
@@ -1482,6 +1487,10 @@ namespace trading_db {
 					if (counter_aver_drawdown) aver_drawdown /= (double)counter_aver_drawdown;
 					total_gain = balance / start_balance;
 				} // if (!temp_balance.empty() && start_balance != 0)
+
+                total_stats.calc();
+                total_buy_stats.calc();
+                total_sell_stats.calc();
 			}
 		}; // BetStats
 
