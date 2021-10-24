@@ -1155,6 +1155,8 @@ namespace trading_db {
 			ChartData day_balance;
 			ChartData hour_balance;
 
+			ChartData symbol_winrate;
+
 			double total_profit = 0;
 			double total_gain = 0;
 
@@ -1162,6 +1164,9 @@ namespace trading_db {
 			double max_absolute_drawdown	= 0;	/// Максимальная абсолютная просадка
 			uint64_t max_drawdown_date		= 0;	/// Дата максимальной просадки
 			double aver_drawdown			= 0;	/// Средняя относительная просадка
+
+			double aver_trade_size          = 0;
+			double aver_absolute_trade_size = 0;
 
 			double aver_profit_per_trade			= 0;	/// Средний профит на сделку
 			double aver_absolute_profit_per_trade	= 0;	/// Средний абсолютный профит на сделку
@@ -1299,6 +1304,8 @@ namespace trading_db {
 				trades_balance.clear();
 				day_balance.clear();
 				hour_balance.clear();
+				//
+				symbol_winrate.clear();
 				// остальное
 				total_profit	= 0;
 				total_gain		= 0;
@@ -1321,7 +1328,7 @@ namespace trading_db {
 			void calc(const T &bets, const double start_balance) noexcept {
 				clear();
 
-				size_t counter_aver_profit = 0;
+				size_t counter_bet = 0;
 				double profit = 0;
 
 				for (auto &bet : bets) {
@@ -1353,8 +1360,8 @@ namespace trading_db {
 					if (!bet.demo && !use_real) continue;
 					if (bet.amount == 0) continue;
 
-					const ztime::timestamp_t timestamp = bet.open_date / ztime::MICROSECONDS_IN_SECOND;
-					const ztime::timestamp_t end_timestamp = bet.close_date / ztime::MICROSECONDS_IN_SECOND;
+					const ztime::timestamp_t timestamp = bet.open_date / ztime::MILLISECONDS_IN_SECOND;
+					const ztime::timestamp_t end_timestamp = bet.close_date / ztime::MILLISECONDS_IN_SECOND;
 					if (bet.status == BetStatus::WIN) {
 						win(bet.symbol, bet.contract_type, timestamp);
 						profit += bet.profit;
@@ -1374,10 +1381,12 @@ namespace trading_db {
 
 						aver_profit_per_trade += bet.profit / bet.amount;
 						aver_absolute_profit_per_trade += bet.profit;
-						++counter_aver_profit;
+						++counter_bet;
 
 						gross_profit += bet.profit;
 						total_profit += bet.profit;
+
+						aver_absolute_trade_size += bet.amount;
 					} else
 					if (bet.status == BetStatus::LOSS) {
 						loss(bet.symbol, bet.contract_type, timestamp);
@@ -1398,10 +1407,12 @@ namespace trading_db {
 
 						aver_profit_per_trade -= 1.0;
 						aver_absolute_profit_per_trade -= bet.amount;
-						++counter_aver_profit;
+						++counter_bet;
 
 						gross_loss += bet.amount;
 						total_profit -= bet.amount;
+
+						aver_absolute_trade_size += bet.amount;
 					} else
 					if (bet.status == BetStatus::STANDOFF) {
 						standoff(bet.symbol, bet.contract_type, timestamp);
@@ -1421,15 +1432,19 @@ namespace trading_db {
 						}
 						aver_profit_per_trade += 0.0;
 						aver_absolute_profit_per_trade += 0;
-						++counter_aver_profit;
+						++counter_bet;
 
 						gross_loss += 0;
+						total_profit += 0;
+
+						aver_absolute_trade_size += bet.amount;
 					}
 				}
 
-				if (counter_aver_profit) {
-					aver_absolute_profit_per_trade /= counter_aver_profit;
-					aver_profit_per_trade /= counter_aver_profit;
+				if (counter_bet) {
+					aver_absolute_profit_per_trade /= (double)counter_bet;
+					aver_profit_per_trade /= (double)counter_bet;
+					aver_absolute_trade_size /= (double)counter_bet;
 				}
 
 				if (gross_loss != 0) {
@@ -1491,6 +1506,11 @@ namespace trading_db {
                 total_stats.calc();
                 total_buy_stats.calc();
                 total_sell_stats.calc();
+
+                for (auto &item : stats_symbol) {
+                    symbol_winrate.x_label.push_back(item.first);
+                    symbol_winrate.y_data.push_back(item.second.winrate * 100);
+                }
 			}
 		}; // BetStats
 
@@ -1505,6 +1525,10 @@ namespace trading_db {
 			bool						real		= false;
 			bool						demo		= false;
 
+			std::vector<BetStats>       currency_stats;
+			std::vector<BetStats>       signals_stats;
+			std::vector<BetStats>       brokers_stats;
+
 			template<class T>
 			void calc(const T &bets) noexcept {
 				std::set<std::string> calc_currencies;
@@ -1517,12 +1541,35 @@ namespace trading_db {
 					calc_signals.insert(bet.signal);
 					calc_symbols.insert(bet.symbol);
 					if (bet.demo) demo = true;
-					else real  = true;
+					else real = true;
 				}
 				brokers = std::vector<std::string>(calc_brokers.begin(), calc_brokers.end());
 				currencies = std::vector<std::string>(calc_currencies.begin(), calc_currencies.end());
 				signals = std::vector<std::string>(calc_signals.begin(), calc_signals.end());
 				symbols = std::vector<std::string>(calc_symbols.begin(), calc_symbols.end());
+
+				currency_stats.clear();
+				signals_stats.clear();
+				brokers_stats.clear();
+
+				currency_stats.resize(currencies.size());
+				signals_stats.resize(currencies.size() * signals.size());
+				brokers_stats.resize(currencies.size() * brokers.size());
+
+                for (size_t c = 0; c < currencies.size(); ++c) {
+                    currency_stats[c].currency = currencies[c];
+                    currency_stats[c].calc(bets, 0);
+                    for (size_t s = 0; s < signals.size(); ++s) {
+                        signals_stats[c+s*currencies.size()].currency = currencies[c];
+                        signals_stats[c+s*currencies.size()].signals.push_back(signals[s]);
+                        signals_stats[c+s*currencies.size()].calc(bets, 0);
+                    }
+                    for (size_t b = 0; b < brokers.size(); ++b) {
+                        brokers_stats[c+b*currencies.size()].currency = currencies[c];
+                        brokers_stats[c+b*currencies.size()].brokers.push_back(brokers[b]);
+                        brokers_stats[c+b*currencies.size()].calc(bets, 0);
+                    }
+                }
 			}
 		}; // MetaBetStats
 	};

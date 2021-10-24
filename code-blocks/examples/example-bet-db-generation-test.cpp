@@ -21,7 +21,7 @@ int main() {
         std::mt19937 rng(dev());
         std::uniform_int_distribution<int> dist_amount(1,700);
         std::uniform_int_distribution<int> dist_broker(0,1);
-        std::uniform_int_distribution<int> dist_timestamp(60,3600);
+        std::uniform_int_distribution<int> dist_timestamp(60,24*3600);
         std::uniform_int_distribution<int> dist_duration(1,30);
         std::uniform_int_distribution<int> dist_contract_type(0,1);
         std::uniform_int_distribution<int> dist_currency(0, 1);
@@ -47,9 +47,9 @@ int main() {
 
             timestamp += dist_timestamp(rng);
 
-            bet.open_date = timestamp;
+            bet.open_date = 1000*timestamp;
             bet.duration = 60 * dist_duration(rng);
-            bet.close_date = bet.open_date + bet.duration;
+            bet.close_date = 1000*(timestamp + bet.duration);
 
             bet.comment = "test";
 
