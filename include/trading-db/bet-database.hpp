@@ -593,6 +593,7 @@ namespace trading_db {
 						std::this_thread::sleep_for(std::chrono::milliseconds(1));
 					}
 					if (config.read_only) {
+                        is_flush = false;
                         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 						continue;
 					}
