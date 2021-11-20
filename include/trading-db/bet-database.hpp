@@ -662,6 +662,17 @@ namespace trading_db {
 			});
 		}
 
+		inline void init_last_bet_uid() noexcept {
+            // инициализируем UID
+            std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
+            const std::string value = get_meta_data_db(stmt_get_meta_data, "last-bet-uid").value;
+            if (!value.empty()) {
+                last_bet_uid = std::stoll(value) + 1;
+            } else {
+                last_bet_uid = 1;
+            }
+		}
+
 		/** \brief Проверить инициализацию БД
 		 * \return Вернет true если БД было инициализирована
 		 */
@@ -763,16 +774,7 @@ namespace trading_db {
 			if (check_init_db()) return false;
 			if (init_db(path, readonly)) {
 				main_task();
-				// инициализируем UID
-				{
-                    std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
-                    const std::string value = get_meta_data_db(stmt_get_meta_data, "last-bet-uid").value;
-                    if (!value.empty()) {
-                        last_bet_uid = std::stoll(value);
-                    } else {
-                        last_bet_uid = 1;
-                    }
-                }
+				init_last_bet_uid(); // инициализируем UID
 				return true;
 			}
 			return false;
