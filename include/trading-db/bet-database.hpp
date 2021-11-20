@@ -30,13 +30,14 @@ namespace trading_db {
 		 */
 		class Config {
 		public:
-			const std::string title	  = "trading_db::BetDatabase ";
-			double idle_time		  = 15;		/**< Время бездействия записи */
-			double meta_data_time	  = 5;		/**< Время обновления мета данных */
-			size_t busy_timeout		  = 0;		/**< Время ожидания БД */
-			size_t threshold_bets	  = 100;	/**< Порог срабатывания по количеству сделок */
+			const std::string title	        = "trading_db::BetDatabase ";
+			const std::string db_version    = "1.0";    /**< Версия БД */
+			double idle_time        = 15;   /**< Время бездействия записи */
+			double meta_data_time   = 5;    /**< Время обновления мета данных */
+			size_t busy_timeout     = 0;    /**< Время ожидания БД */
+			size_t threshold_bets   = 100;  /**< Порог срабатывания по количеству сделок */
 			std::atomic<bool> read_only = ATOMIC_VAR_INIT(false);
-			std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
+			std::atomic<bool> use_log   = ATOMIC_VAR_INIT(false);
 		};
 
 		Config config;	/**< Конфигурация БД */
@@ -83,6 +84,7 @@ namespace trading_db {
 			double amount		= 0;	/// размер ставки
 			double profit		= 0;	/// размер выплаты
 			double payout		= 0;	/// процент выплат
+			double winrate      = 0;    /// винрейт сигнала
 
 			int64_t delay		= 0;	/// задержка на открытие ставки в миллисекундах
 			int64_t ping		= 0;	/// пинг запроса на открытие ставки в миллисекундах
@@ -172,7 +174,7 @@ namespace trading_db {
 			sqlite3_busy_timeout(sqlite_db_ptr, config.busy_timeout);
 			// создаем таблицу в базе данных, если она еще не создана
 			const std::string create_bets_table_sql(
-				"CREATE TABLE IF NOT EXISTS 'Bets' ("
+				"CREATE TABLE IF NOT EXISTS 'bets-data-v1' ("
 				"uid			INTEGER NOT NULL,"
 				"broker_id		INTEGER NOT NULL,"
 				"open_date		INTEGER NOT NULL,"
@@ -182,6 +184,7 @@ namespace trading_db {
 				"amount			REAL	NOT NULL,"
 				"profit			REAL	NOT NULL,"
 				"payout			REAL	NOT NULL,"
+				"winrate	    REAL	NOT NULL,"
 				"delay			INTEGER NOT NULL,"
 				"ping			INTEGER NOT NULL,"
 				"duration		INTEGER NOT NULL,"
@@ -200,7 +203,7 @@ namespace trading_db {
 				"PRIMARY KEY (open_date, uid))");
 
 			const std::string create_meta_data_table_sql =
-					"CREATE TABLE IF NOT EXISTS 'MetaData' ("
+					"CREATE TABLE IF NOT EXISTS 'meta-data' ("
 					"key				TEXT	PRIMARY KEY NOT NULL,"
 					"value				TEXT				NOT NULL)";
 			if (!utility::prepare(sqlite_db_ptr, create_bets_table_sql)) return false;
@@ -219,7 +222,7 @@ namespace trading_db {
 				return false;
 			}
 			if (!sqlite_transaction.init(sqlite_db) ||
-				!stmt_replace_bet.init(sqlite_db, "INSERT OR REPLACE INTO 'Bets' ("
+				!stmt_replace_bet.init(sqlite_db, "INSERT OR REPLACE INTO 'bets-data-v1' ("
 					"uid,"
 					"broker_id,"
 					"open_date,"
@@ -229,6 +232,7 @@ namespace trading_db {
 					"amount,"
 					"profit,"
 					"payout,"
+					"winrate,"
 					"delay,"
 					"ping,"
 					"duration,"
@@ -244,11 +248,11 @@ namespace trading_db {
 					"signal,"
 					"comment,"
 					"user_data)"
-					"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)") ||
-				!stmt_replace_meta_data.init(sqlite_db, "INSERT OR REPLACE INTO 'MetaData' (key, value) VALUES (?, ?)") ||
-				!stmt_get_meta_data.init(sqlite_db, "SELECT * FROM 'MetaData' WHERE key == :x") ||
-				!stmt_get_bet.init(sqlite_db, "SELECT * FROM 'Bets' WHERE open_date == :x AND uid == :y") ||
-				!stmt_get_all_bet.init(sqlite_db, "SELECT * FROM 'Bets'")) {
+					"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)") ||
+				!stmt_replace_meta_data.init(sqlite_db, "INSERT OR REPLACE INTO 'meta-data' (key, value) VALUES (?, ?)") ||
+				!stmt_get_meta_data.init(sqlite_db, "SELECT * FROM 'meta-data' WHERE key == :x") ||
+				!stmt_get_bet.init(sqlite_db, "SELECT * FROM 'bets-data-v1' WHERE open_date == :x AND uid == :y") ||
+				!stmt_get_all_bet.init(sqlite_db, "SELECT * FROM 'bets-data-v1'")) {
 				sqlite3_close_v2(sqlite_db);
 				sqlite_db = nullptr;
 				return false;
@@ -299,6 +303,10 @@ namespace trading_db {
 					return false;
 				}
 				if (sqlite3_bind_double(stmt.get(), index++, static_cast<double>(buffer[i].payout)) != SQLITE_OK) {
+					transaction.rollback();
+					return false;
+				}
+				if (sqlite3_bind_double(stmt.get(), index++, static_cast<double>(buffer[i].winrate)) != SQLITE_OK) {
 					transaction.rollback();
 					return false;
 				}
@@ -463,6 +471,7 @@ namespace trading_db {
 					bet_data.amount			= sqlite3_column_double(stmt.get(), index++);
 					bet_data.profit			= sqlite3_column_double(stmt.get(), index++);
 					bet_data.payout			= sqlite3_column_double(stmt.get(), index++);
+					bet_data.winrate	    = sqlite3_column_double(stmt.get(), index++);
 
 					bet_data.delay			= sqlite3_column_int(stmt.get(), index++);
 					bet_data.ping			= sqlite3_column_int(stmt.get(), index++);
@@ -573,11 +582,14 @@ namespace trading_db {
 			const std::string value = get_meta_data_db(stmt_get_meta_data, "update-timestamp").value;
 			if (!value.empty()) {
                 last_update_timestamp = std::stoll(value);
-			} else if (!config.read_only) {
+			} else
+			if (!config.read_only) {
 				// запишем мета-данные
 				last_update_timestamp = ztime::get_timestamp();
-				MetaData meta_data("update-timestamp", std::to_string((uint64_t)last_update_timestamp));
-				replace_db(meta_data, sqlite_transaction, stmt_replace_meta_data);
+				MetaData meta_data_ut("update-timestamp", std::to_string((uint64_t)last_update_timestamp));
+				replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
+				MetaData meta_data_dbv("db-version", config.db_version);
+				replace_db(meta_data_dbv, sqlite_transaction, stmt_replace_meta_data);
 			} else {
                 last_update_timestamp = ztime::get_timestamp();
 			}
@@ -846,7 +858,7 @@ namespace trading_db {
 				if (!check_init_db()) return T();
 			}
 			// формируем запрос
-			std::string request_str("SELECT * FROM 'Bets' WHERE");
+			std::string request_str("SELECT * FROM 'bets-data-v1' WHERE");
 			int counter_args = 0; //  счетчик аргументов
 			if (request.start_date) {
 				request_str += " open_date >= " + std::to_string(request.start_date);
@@ -1001,7 +1013,7 @@ namespace trading_db {
 		inline bool remove_all() {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM 'Bets'");
+			return utility::prepare(sqlite_db, "DELETE FROM 'bets-data-v1'");
 		}
 
 		/** \brief Удалить сделку
@@ -1011,7 +1023,7 @@ namespace trading_db {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			return utility::prepare(sqlite_db,
-				"DELETE FROM 'Bets' WHERE open_date == " +
+				"DELETE FROM 'bets-data-v1' WHERE open_date == " +
 				std::to_string(bet_data.open_date) +
 				" AND uid == " +
 				std::to_string(bet_data.uid));
@@ -1024,7 +1036,7 @@ namespace trading_db {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			return utility::prepare(sqlite_db,
-				"DELETE FROM 'Bets' WHERE uid == " +
+				"DELETE FROM 'bets-data-v1' WHERE uid == " +
 				std::to_string(uid));
 		}
 
@@ -1036,7 +1048,7 @@ namespace trading_db {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			if (keys.empty()) return false;
-			std::string message("DELETE FROM 'Bets' WHERE key IN (");
+			std::string message("DELETE FROM 'bets-data-v1' WHERE key IN (");
 			for (auto it = keys.begin(); it != keys.end(); ++it) {
 				if (it != keys.begin()) message += ",";
 				message += *it;

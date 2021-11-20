@@ -154,11 +154,11 @@ int main() {
         std::cout << "#get_bets" << std::endl;
 
         trading_db::BetDatabase::RequestConfig req_config;
-        req_config.use_real = false;
-        req_config.use_demo = false;
+        req_config.use_real = true;
+        req_config.use_demo = true;
         std::vector<bet_t> read_bets = bet_db.get_bets<std::vector<bet_t>>(req_config);
 
-        if (1)
+        if (0)
         for (auto bet : read_bets) {
             std::cout << "--------------------------------------" << std::endl;
             std::cout <<  "uid "             << bet.uid               << std::endl;
