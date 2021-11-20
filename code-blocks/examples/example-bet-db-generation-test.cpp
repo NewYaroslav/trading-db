@@ -13,7 +13,7 @@ int main() {
         std::cout << bet_db.open(path) << std::endl;
 
         std::cout << "#remove_all" << std::endl;
-        std::cout << bet_db.remove_all() << std::endl;
+        //std::cout << bet_db.remove_all() << std::endl;
 
         using bet_t = trading_db::BetDatabase::BetData;
 

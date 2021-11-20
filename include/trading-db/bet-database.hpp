@@ -122,6 +122,7 @@ namespace trading_db {
 
 		// буфер для записи
 		std::deque<BetData> write_buffer;
+		int64_t write_last_bet_uid = 0;
 		std::mutex write_buffer_mutex;
 		// для бэкапа
 		bool is_backup = ATOMIC_VAR_INIT(false);
@@ -208,9 +209,9 @@ namespace trading_db {
 					"value				TEXT				NOT NULL)";
 			if (!utility::prepare(sqlite_db_ptr, create_bets_table_sql)) return false;
 			if (!utility::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
-			std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
-			last_bet_uid = sqlite3_last_insert_rowid(sqlite_db_ptr);
-			if (last_bet_uid <= 0) last_bet_uid = 1;
+			// std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
+			// last_bet_uid = sqlite3_last_insert_rowid(sqlite_db_ptr);
+			// if (last_bet_uid <= 0) last_bet_uid = 1;
 			return true;
 		}
 
@@ -638,17 +639,21 @@ namespace trading_db {
 
 					// скопируем данные
 					std::deque<BetData> buffer;
+					int64_t buffer_last_bet_uid = 0;
 					{
 						std::lock_guard<std::mutex> lock(write_buffer_mutex);
 						buffer = write_buffer;
+						buffer_last_bet_uid = write_last_bet_uid;
 						write_buffer.clear();
 					}
 					// запишем данные
 					replace_db(buffer, sqlite_transaction, stmt_replace_bet);
 					// запишем мета-данные
 					last_update_timestamp = ztime::get_timestamp();
-					MetaData meta_data("update-timestamp", std::to_string(last_update_timestamp));
-					replace_db(meta_data, sqlite_transaction, stmt_replace_meta_data);
+					MetaData meta_data_ut("update-timestamp", std::to_string(last_update_timestamp));
+					replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
+					MetaData meta_data_lbu("last-bet-uid", std::to_string(buffer_last_bet_uid));
+					replace_db(meta_data_lbu, sqlite_transaction, stmt_replace_meta_data);
 
 					timer.reset();
 					timer_meta_data.reset();
@@ -758,11 +763,24 @@ namespace trading_db {
 			if (check_init_db()) return false;
 			if (init_db(path, readonly)) {
 				main_task();
+				// инициализируем UID
+				{
+                    std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
+                    const std::string value = get_meta_data_db(stmt_get_meta_data, "last-bet-uid").value;
+                    if (!value.empty()) {
+                        last_bet_uid = std::stoll(value);
+                    } else {
+                        last_bet_uid = 1;
+                    }
+                }
 				return true;
 			}
 			return false;
 		}
 
+        /** \brief Получить последнюю метку времени обновления БД
+         * \return Последняя метка времени обновления БД
+         */
 		inline uint64_t get_last_update() noexcept {
 			return last_update_timestamp;
 		}
@@ -793,6 +811,7 @@ namespace trading_db {
 			if (bet_data.uid <= 0) bet_data.uid = get_bet_uid();
 			std::lock_guard<std::mutex> lock(write_buffer_mutex);
 			write_buffer.push_back(bet_data);
+			write_last_bet_uid = bet_data.uid;
 			return true;
 		}
 
