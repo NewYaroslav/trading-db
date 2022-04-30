@@ -190,6 +190,7 @@
 		<Unit filename="../../include/trading-db/utility/files.hpp" />
 		<Unit filename="../../include/trading-db/utility/print.hpp" />
 		<Unit filename="../../include/trading-db/utility/protection.hpp" />
+		<Unit filename="../../include/trading-db/utility/safe-queue.hpp" />
 		<Unit filename="../../include/trading-db/utility/sqlite-func.hpp" />
 		<Unit filename="../../lib/siphash-hpp/include/siphash-hpp/siphash.hpp">
 			<Option target="example-list-db" />

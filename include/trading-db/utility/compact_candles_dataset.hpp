@@ -8,62 +8,62 @@
 #include <ztime.hpp>
 
 namespace trading_db {
-    namespace utility {
+	namespace utility {
 
 		/** \brief Класс для хранения бара
-         */
-        class Candle {
-        public:
-            double open;
-            double high;
-            double low;
-            double close;
-            double volume;
-            ztime::timestamp_t timestamp;
+		 */
+		class Candle {
+		public:
+			double open;
+			double high;
+			double low;
+			double close;
+			double volume;
+			ztime::timestamp_t timestamp;
 
-            Candle() :
-                open(0),
-                high(0),
-                low (0),
-                close(0),
-                volume(0),
-                timestamp(0) {
-            };
+			Candle() :
+				open(0),
+				high(0),
+				low (0),
+				close(0),
+				volume(0),
+				timestamp(0) {
+			};
 
-            Candle(
-                    const double &new_open,
-                    const double &new_high,
-                    const double &new_low,
-                    const double &new_close,
-                    const uint64_t &new_timestamp) :
-                open(new_open),
-                high(new_high),
-                low (new_low),
-                close(new_close),
-                volume(0),
-                timestamp(new_timestamp) {}
+			Candle(
+					const double &new_open,
+					const double &new_high,
+					const double &new_low,
+					const double &new_close,
+					const uint64_t &new_timestamp) :
+				open(new_open),
+				high(new_high),
+				low (new_low),
+				close(new_close),
+				volume(0),
+				timestamp(new_timestamp) {}
 
-            Candle(
-                    const double &new_open,
-                    const double &new_high,
-                    const double &new_low,
-                    const double &new_close,
-                    const double &new_volume,
-                    const uint64_t &new_timestamp) :
-                open(new_open),
-                high(new_high),
-                low (new_low),
-                close(new_close),
-                volume(new_volume),
-                timestamp(new_timestamp) {}
+			Candle(
+					const double &new_open,
+					const double &new_high,
+					const double &new_low,
+					const double &new_close,
+					const double &new_volume,
+					const uint64_t &new_timestamp) :
+				open(new_open),
+				high(new_high),
+				low (new_low),
+				close(new_close),
+				volume(new_volume),
+				timestamp(new_timestamp) {}
 
-            bool empty() const noexcept {
-                return (timestamp == 0 || close == 0);
-            }
-        }; // Candle
+			bool empty() const noexcept {
+				return (timestamp == 0 || close == 0);
+			}
+		}; // Candle
 
 		/** \brief Класс массива баров
-         */
+		 */
 		class CompactCandlesDataset5x1440 {
 		private:
 			// reg_a - множитель цены и объема (8 бит)
@@ -257,7 +257,7 @@ namespace trading_db {
 					}
 					break;
 				case 1: { // uint16_t
-                        uint16_t value = 0;
+						uint16_t value = 0;
 						get_ptr<uint16_t, uint16_t>(value, p, offset_ptr, offset);
 						offset_ptr += sizeof(uint16_t);
 						if (value != 0x8000) status = true;
@@ -348,10 +348,10 @@ namespace trading_db {
 				data[0] = reg_a;
 				data[1] = reg_b;
 				if (timestamp_day == 0) {
-                    // находим unix день
-                    const uint16_t reg_c = ztime::get_day(st);
-                    data[2] = (uint8_t)reg_c;
-                    data[3] = (uint8_t)(reg_c >> 8);
+					// находим unix день
+					const uint16_t reg_c = ztime::get_day(st);
+					data[2] = (uint8_t)reg_c;
+					data[3] = (uint8_t)(reg_c >> 8);
 				}
 
 				uint8_t* p = data.data();
@@ -414,8 +414,8 @@ namespace trading_db {
 				}
 
 				// получаем точность котировок и объема
-				price_scale = data[0] & 0x0F; 			// reg_a 0-3
-				volume_scale = (data[0] >> 4) & 0x0F; 	// reg_a 4-7
+				price_scale = data[0] & 0x0F;			// reg_a 0-3
+				volume_scale = (data[0] >> 4) & 0x0F;	// reg_a 4-7
 
 				// получаем множитель для котировок иобъема
 				const uint64_t price_factor = (uint64_t)(std::pow(10, price_scale) + 0.5d);
@@ -537,10 +537,10 @@ namespace trading_db {
 				data[0] = reg_a;
 				data[1] = reg_b;
 				if (timestamp_day == 0) {
-                    // находим unix день
-                    const uint16_t reg_c = ztime::get_day(st);
-                    data[2] = (uint8_t)reg_c;
-                    data[3] = (uint8_t)(reg_c >> 8);
+					// находим unix день
+					const uint16_t reg_c = ztime::get_day(st);
+					data[2] = (uint8_t)reg_c;
+					data[3] = (uint8_t)(reg_c >> 8);
 				}
 
 				uint8_t* p = data.data();
@@ -604,8 +604,8 @@ namespace trading_db {
 				}
 
 				// получаем точность котировок и объема
-				price_scale = data[0] & 0x0F; 			// reg_a 0-3
-				volume_scale = (data[0] >> 4) & 0x0F; 	// reg_a 4-7
+				price_scale = data[0] & 0x0F;			// reg_a 0-3
+				volume_scale = (data[0] >> 4) & 0x0F;	// reg_a 4-7
 
 				// получаем множитель для котировок иобъема
 				const uint64_t price_factor = (uint64_t)(std::pow(10, price_scale) + 0.5d);
@@ -642,7 +642,7 @@ namespace trading_db {
 							// OHLCV
 							candles[timestamp]
 							//candles.emplace_hint(it, timestamp, (0,0,0,0,0,timestamp));
-                            it = candles.end();
+							it = candles.end();
 						}
 						continue;
 					}
@@ -667,7 +667,7 @@ namespace trading_db {
 					const double fcv = (double)cv / (double)volume_factor;
 
 					//candles.emplace_hint(it, timestamp, fco,fch,fcl,fcc,fcv,timestamp);
-                    it = candles.end();
+					it = candles.end();
 				}
 			} // read_sequence
 			*/

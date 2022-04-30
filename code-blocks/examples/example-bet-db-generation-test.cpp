@@ -54,9 +54,9 @@ int main() {
             bet.comment = "test";
 
             if (dist_contract_type(rng) == 0) {
-                bet.contract_type = trading_db::BetDatabase::ContractTypes::BUY;
+                bet.contract_type = trading_db::BetDatabase::ContractType::BUY;
             } else {
-                bet.contract_type = trading_db::BetDatabase::ContractTypes::SELL;
+                bet.contract_type = trading_db::BetDatabase::ContractType::SELL;
             }
 
             if (dist_currency(rng) == 0) {
@@ -85,10 +85,10 @@ int main() {
                 bet.close_price = bet.open_price;
             } else
             if (w < tw) {
-                if (bet.contract_type == trading_db::BetDatabase::ContractTypes::BUY) bet.close_price = bet.open_price + 0.00005;
+                if (bet.contract_type == trading_db::BetDatabase::ContractType::BUY) bet.close_price = bet.open_price + 0.00005;
                 else bet.close_price = bet.open_price - 0.00005;
             } else {
-                if (bet.contract_type == trading_db::BetDatabase::ContractTypes::BUY) bet.close_price = bet.open_price - 0.00005;
+                if (bet.contract_type == trading_db::BetDatabase::ContractType::BUY) bet.close_price = bet.open_price - 0.00005;
                 else bet.close_price = bet.open_price + 0.00005;
             }
 
@@ -137,7 +137,7 @@ int main() {
 
             bet.demo = dist_demo(rng) == 1;
 
-            bet.type = trading_db::BetDatabase::BoTypes::SPRINT;
+            bet.type = trading_db::BetDatabase::BoType::SPRINT;
             bet.user_data = "test";
             bet.uid = bet_db.get_bet_uid();
 

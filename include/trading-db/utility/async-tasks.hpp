@@ -9,92 +9,93 @@
 #include <deque>
 
 namespace trading_db {
-    namespace utility {
-        /** \brief Класс для выполнений асинхронных задач
-         */
-        class AsyncTasks {
-        private:
-            std::mutex futures_mutex;
-            std::deque<std::future<void>> futures;
-            std::atomic<bool> is_shutdown = ATOMIC_VAR_INIT(false);
+	namespace utility {
+		
+		/** \brief Класс для выполнений асинхронных задач
+		 */
+		class AsyncTasks {
+		private:
+			std::mutex futures_mutex;
+			std::deque<std::future<void>> futures;
+			std::atomic<bool> is_shutdown = ATOMIC_VAR_INIT(false);
 
-        public:
+		public:
 
-            /** \brief Очистить список запросов
-             */
-            void clear() noexcept {
-                std::lock_guard<std::mutex> lock(futures_mutex);
-                size_t index = 0;
-                while(index < futures.size()) {
-                    try {
-                        if(futures[index].valid()) {
-                            std::future_status status = futures[index].wait_for(std::chrono::milliseconds(0));
-                            if(status == std::future_status::ready) {
-                                futures[index].get();
-                                futures.erase(futures.begin() + index);
-                                continue;
-                            }
-                        }
-                    }
-                    catch(const std::exception &e) {}
-                    catch(...) {}
-                    ++index;
-                }
-            } // clear
+			/** \brief Очистить список запросов
+			 */
+			void clear() noexcept {
+				std::lock_guard<std::mutex> lock(futures_mutex);
+				size_t index = 0;
+				while(index < futures.size()) {
+					try {
+						if(futures[index].valid()) {
+							std::future_status status = futures[index].wait_for(std::chrono::milliseconds(0));
+							if(status == std::future_status::ready) {
+								futures[index].get();
+								futures.erase(futures.begin() + index);
+								continue;
+							}
+						}
+					}
+					catch(const std::exception &e) {}
+					catch(...) {}
+					++index;
+				}
+			} // clear
 
-            /** \brief Создать задачу
-             * \param callback Функция с задачей, которую необходимо исполнить асинхронно
-             */
-            void create_task(const std::function<void()> &callback) noexcept {
-                {
-                    std::lock_guard<std::mutex> lock(futures_mutex);
-                    futures.resize(futures.size() + 1);
-                    futures.back() = std::async(std::launch::async, [callback] {
-                        callback();
-                    });
-                }
-                clear();
-            } // creat_task
+			/** \brief Создать задачу
+			 * \param callback Функция с задачей, которую необходимо исполнить асинхронно
+			 */
+			void create_task(const std::function<void()> &callback) noexcept {
+				{
+					std::lock_guard<std::mutex> lock(futures_mutex);
+					futures.resize(futures.size() + 1);
+					futures.back() = std::async(std::launch::async, [callback] {
+						callback();
+					});
+				}
+				clear();
+			} // creat_task
 
-            /** \brief Проверить флаг сброса
-             * \return Вернет true в случае наличия сброса
-             */
-            inline bool check_shutdown() const noexcept {
-                return is_shutdown;
-            };
+			/** \brief Проверить флаг сброса
+			 * \return Вернет true в случае наличия сброса
+			 */
+			inline bool check_shutdown() const noexcept {
+				return is_shutdown;
+			};
 
-            /** \brief Ожидание завершения всех задач
-             */
-            inline void wait() {
-                std::lock_guard<std::mutex> lock(futures_mutex);
-                for(size_t i = 0; i < futures.size(); ++i) {
-                    std::shared_future<void> share = futures[i].share();
-                    if(share.valid()) {
-                        try {
-                            share.wait();
-                            share.get();
-                        } catch(...) {}
-                    }
-                }
-            }
+			/** \brief Ожидание завершения всех задач
+			 */
+			inline void wait() {
+				std::lock_guard<std::mutex> lock(futures_mutex);
+				for(size_t i = 0; i < futures.size(); ++i) {
+					std::shared_future<void> share = futures[i].share();
+					if(share.valid()) {
+						try {
+							share.wait();
+							share.get();
+						} catch(...) {}
+					}
+				}
+			}
 
-            AsyncTasks() noexcept {};
+			AsyncTasks() noexcept {};
 
-            ~AsyncTasks() noexcept {
-                is_shutdown = true;
-                std::lock_guard<std::mutex> lock(futures_mutex);
-                for(size_t i = 0; i < futures.size(); ++i) {
-                    if(futures[i].valid()) {
-                        try {
-                            futures[i].wait();
-                            futures[i].get();
-                        } catch(...) {}
-                    }
-                }
-            } // ~AsyncTasks()
+			~AsyncTasks() noexcept {
+				is_shutdown = true;
+				std::lock_guard<std::mutex> lock(futures_mutex);
+				for(size_t i = 0; i < futures.size(); ++i) {
+					if(futures[i].valid()) {
+						try {
+							futures[i].wait();
+							futures[i].get();
+						} catch(...) {}
+					}
+				}
+			} // ~AsyncTasks()
 
-        }; // AsyncTasks
-    }; // utility
+		}; // AsyncTasks
+	}; // utility
 }; // trading_db
 
 #endif // TRADING_DB_ASYNC_TASKS_HPP_INCLUDED

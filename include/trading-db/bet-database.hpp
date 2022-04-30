@@ -9,6 +9,7 @@
 #include "config.hpp"
 #include "utility/sqlite-func.hpp"
 #include "utility/async-tasks.hpp"
+#include "utility/safe-queue.hpp"
 #include "utility/print.hpp"
 #include "utility/files.hpp"
 #include <ztime.hpp>
@@ -30,27 +31,30 @@ namespace trading_db {
 		 */
 		class Config {
 		public:
-			const std::string title	        = "trading_db::BetDatabase ";
-			const std::string db_version    = "1.0";    /**< Версия БД */
-			double idle_time        = 15;   /**< Время бездействия записи */
-			double meta_data_time   = 5;    /**< Время обновления мета данных */
-			size_t busy_timeout     = 0;    /**< Время ожидания БД */
-			size_t threshold_bets   = 100;  /**< Порог срабатывания по количеству сделок */
+			const std::string title			= "trading_db::BetDatabase ";
+			const std::string db_version	= "1.0";	/**< Версия БД */
+			const std::string key_db_version	= "version";
+			const std::string key_update_date	= "update-date";
+			const std::string key_bet_uid		= "bet-id";
+			double idle_time		= 15;	/**< Время бездействия записи */
+			double meta_data_time	= 1;	/**< Время обновления мета данных */
+			size_t busy_timeout		= 0;	/**< Время ожидания БД */
+			size_t threshold_bets	= 1000; /**< Порог срабатывания по количеству сделок */
 			std::atomic<bool> read_only = ATOMIC_VAR_INIT(false);
-			std::atomic<bool> use_log   = ATOMIC_VAR_INIT(false);
+			std::atomic<bool> use_log	= ATOMIC_VAR_INIT(false);
 		};
 
 		Config config;	/**< Конфигурация БД */
 
 		/// Направление ставки
-		enum class ContractTypes {
+		enum class ContractType {
 			UNKNOWN_STATE = 0,
 			BUY = 1,
 			SELL = -1,
 		};
 
 		/// Тип ставки
-		enum class BoTypes {
+		enum class BoType {
 			SPRINT = 0,
 			CLASSIC = 1,
 		};
@@ -84,7 +88,7 @@ namespace trading_db {
 			double amount		= 0;	/// размер ставки
 			double profit		= 0;	/// размер выплаты
 			double payout		= 0;	/// процент выплат
-			double winrate      = 0;    /// винрейт сигнала
+			double winrate		= 0;	/// винрейт сигнала
 
 			int64_t delay		= 0;	/// задержка на открытие ставки в миллисекундах
 			int64_t ping		= 0;	/// пинг запроса на открытие ставки в миллисекундах
@@ -94,9 +98,9 @@ namespace trading_db {
 			bool demo			= true;	/// флаг демо аккаунта
 			bool last			= true;	/// флаг последней сделки - для подсчета винрейта в системах риск-менджента типа мартингейла и т.п.
 
-			ContractTypes contract_type = ContractTypes::UNKNOWN_STATE;	/// тип контракта, см.BetContractType
-			BetStatus status	= BetStatus::UNKNOWN_STATE;	/// состояние сделки, см.BetStatus
-			BoTypes type		= BoTypes::SPRINT;			/// тип бинарного опциона(SPRINT, CLASSIC и т.д.), см.BetType
+			ContractType contract_type	= ContractType::UNKNOWN_STATE;	/// тип контракта, см.BetContractType
+			BetStatus status			= BetStatus::UNKNOWN_STATE;		/// состояние сделки, см.BetStatus
+			BoType type					= BoType::SPRINT;				/// тип бинарного опциона(SPRINT, CLASSIC и т.д.), см.BetType
 
 			std::string symbol;		/// имя символа(валютная пара, акции, индекс и пр., например EURUSD)
 			std::string broker;		/// имя брокера
@@ -120,21 +124,25 @@ namespace trading_db {
 		utility::SqliteStmt stmt_get_bet;
 		utility::SqliteStmt stmt_get_all_bet;
 
+		utility::SafeQueue<BetData> bet_safe_queue;
+
 		// буфер для записи
+		/*
 		std::deque<BetData> write_buffer;
 		int64_t write_last_bet_uid = 0;
 		std::mutex write_buffer_mutex;
+		*/
 		// для бэкапа
 		bool is_backup = ATOMIC_VAR_INIT(false);
 		std::mutex backup_mutex;
 		// флаг сброса
 		std::atomic<bool> is_shutdown = ATOMIC_VAR_INIT(false);
 		// уникальный номер сделки
-		int64_t last_bet_uid = 0;
-		std::mutex last_bet_uid_mutex;
-		// для очистки буфера
+		int64_t bet_uid = 0;
+		std::mutex bet_uid_mutex;
+		// флаг очистки буфера
 		std::atomic<bool> is_flush = ATOMIC_VAR_INIT(false);
-		// для методов
+		// блокировка методов класса
 		std::mutex method_mutex;
 
 		utility::AsyncTasks async_tasks;
@@ -151,7 +159,7 @@ namespace trading_db {
 			MetaData(const std::string &k, const std::string &v) : key(k), value(v) {};
 		};
 
-		std::atomic<uint64_t> last_update_timestamp = ATOMIC_VAR_INIT(0);	/**< Последнее время обновления БД */
+		std::atomic<uint64_t> last_update_date = ATOMIC_VAR_INIT(0);	/**< Последнее время обновления БД */
 
 		inline void print_error(const std::string message, const int line) noexcept {
 			if (config.use_log) {
@@ -185,7 +193,7 @@ namespace trading_db {
 				"amount			REAL	NOT NULL,"
 				"profit			REAL	NOT NULL,"
 				"payout			REAL	NOT NULL,"
-				"winrate	    REAL	NOT NULL,"
+				"winrate		REAL	NOT NULL,"
 				"delay			INTEGER NOT NULL,"
 				"ping			INTEGER NOT NULL,"
 				"duration		INTEGER NOT NULL,"
@@ -472,7 +480,7 @@ namespace trading_db {
 					bet_data.amount			= sqlite3_column_double(stmt.get(), index++);
 					bet_data.profit			= sqlite3_column_double(stmt.get(), index++);
 					bet_data.payout			= sqlite3_column_double(stmt.get(), index++);
-					bet_data.winrate	    = sqlite3_column_double(stmt.get(), index++);
+					bet_data.winrate		= sqlite3_column_double(stmt.get(), index++);
 
 					bet_data.delay			= sqlite3_column_int(stmt.get(), index++);
 					bet_data.ping			= sqlite3_column_int(stmt.get(), index++);
@@ -483,9 +491,9 @@ namespace trading_db {
 					bet_data.demo			= static_cast<bool>(sqlite3_column_int(stmt.get(), index++));
 					bet_data.last			= static_cast<bool>(sqlite3_column_int(stmt.get(), index++));
 
-					bet_data.contract_type	= static_cast<ContractTypes>(sqlite3_column_int(stmt.get(), index++));
+					bet_data.contract_type	= static_cast<ContractType>(sqlite3_column_int(stmt.get(), index++));
 					bet_data.status			= static_cast<BetStatus>(sqlite3_column_int(stmt.get(), index++));
-					bet_data.type			= static_cast<BoTypes>(sqlite3_column_int(stmt.get(), index++));
+					bet_data.type			= static_cast<BoType>(sqlite3_column_int(stmt.get(), index++));
 
 					bet_data.symbol		= (const char *)sqlite3_column_text(stmt.get(), index++);
 					bet_data.broker		= (const char *)sqlite3_column_text(stmt.get(), index++);
@@ -580,104 +588,153 @@ namespace trading_db {
 
 		// основная задача (запись данных вБД) для фонового процесса
 		void main_task() {
-			const std::string value = get_meta_data_db(stmt_get_meta_data, "update-timestamp").value;
-			if (!value.empty()) {
-                last_update_timestamp = std::stoll(value);
-			} else
-			if (!config.read_only) {
-				// запишем мета-данные
-				last_update_timestamp = ztime::get_timestamp();
-				MetaData meta_data_ut("update-timestamp", std::to_string((uint64_t)last_update_timestamp));
-				replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
-				MetaData meta_data_dbv("db-version", config.db_version);
-				replace_db(meta_data_dbv, sqlite_transaction, stmt_replace_meta_data);
-			} else {
-                last_update_timestamp = ztime::get_timestamp();
-			}
+			init_version();
+			init_update_date();
+			init_bet_uid();
 			async_tasks.create_task([&]() {
+				std::deque<BetData> buffer;
 				ztime::Timer timer;
 				ztime::Timer timer_meta_data;
 				while (!is_shutdown) {
-					// читаем мета данные
-					if (timer_meta_data.get_elapsed() > config.meta_data_time) {
-						timer_meta_data.reset();
-						const std::string value = get_meta_data_db(stmt_get_meta_data, "update-timestamp").value;
-						if (!value.empty()) last_update_timestamp = std::stoll(value);
-						std::this_thread::sleep_for(std::chrono::milliseconds(1));
-					}
-					if (config.read_only) {
-                        is_flush = false;
-                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-						continue;
-					}
-					// получаем размер буфера для записи
-					size_t write_buffer_size = 0;
-					{
-						std::lock_guard<std::mutex> lock(write_buffer_mutex);
-						write_buffer_size = write_buffer.size();
-					}
-					// замеряем время бездействия
-					const double idle_time = timer.get_elapsed();
-					// проверяем наличие данных для записи
-					if (write_buffer_size == 0) {
-						timer.reset();
-						is_flush = false;
-						std::this_thread::sleep_for(std::chrono::milliseconds(1));
-						continue;
-					}
-					// проверяем условия для начала записи
-					if (idle_time < config.idle_time &&
-						write_buffer_size < config.threshold_bets &&
-						!is_flush)	{
-						std::this_thread::sleep_for(std::chrono::milliseconds(1));
-						continue;
-					}
-
-					// если порог количества ставок превышен
-					// или время бездействия истекло
-					// начинаем запись в БД
-
-					// скопируем данные
-					std::deque<BetData> buffer;
-					int64_t buffer_last_bet_uid = 0;
-					{
-						std::lock_guard<std::mutex> lock(write_buffer_mutex);
-						buffer = write_buffer;
-						buffer_last_bet_uid = write_last_bet_uid;
-						write_buffer.clear();
-					}
-					// запишем данные
-					replace_db(buffer, sqlite_transaction, stmt_replace_bet);
-					// запишем мета-данные
-					last_update_timestamp = ztime::get_timestamp();
-					MetaData meta_data_ut("update-timestamp", std::to_string(last_update_timestamp));
-					replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
-					MetaData meta_data_lbu("last-bet-uid", std::to_string(buffer_last_bet_uid));
-					replace_db(meta_data_lbu, sqlite_transaction, stmt_replace_meta_data);
-
-					timer.reset();
-					timer_meta_data.reset();
-					is_flush = false;
-				}
+					// вычисляем время ожидания записи
+					const size_t delay_ms =
+						std::min(
+							(size_t)(config.idle_time * ztime::MILLISECONDS_IN_SECOND),
+							(size_t)(config.meta_data_time * ztime::MILLISECONDS_IN_SECOND)
+						);
+					bet_safe_queue.update(
+							delay_ms,
+							[&](const BetData &bet) {
+								if (config.read_only) return;
+								buffer.push_back(bet);
+								// проверяем условие записи
+								if (buffer.size() >= config.threshold_bets) {
+									timer.reset();
+									// запишем данные
+									replace_db(buffer, sqlite_transaction, stmt_replace_bet);
+									buffer.clear();
+									// обновим мета-данные
+									last_update_date = ztime::get_timestamp();
+									MetaData meta_data_ut(config.key_update_date, std::to_string(last_update_date));
+									int64_t update_bet_uid = 0;
+									{
+										std::lock_guard<std::mutex> lock(bet_uid_mutex);
+										update_bet_uid = bet_uid;
+									}
+									MetaData meta_data_lbu(config.key_bet_uid, std::to_string(update_bet_uid));
+									// запишем мета-данные
+									replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
+									replace_db(meta_data_lbu, sqlite_transaction, stmt_replace_meta_data);
+									// очистим флаг flush
+									is_flush = false;
+								}
+							},
+							[&]() {
+								// поступил сброс
+								if (!buffer.empty()) {
+									timer.reset();
+									// запишем данные
+									replace_db(buffer, sqlite_transaction, stmt_replace_bet);
+									buffer.clear();
+									// обновим мета-данные
+									last_update_date = ztime::get_timestamp();
+									MetaData meta_data_ut(config.key_update_date, std::to_string(last_update_date));
+									int64_t update_bet_uid = 0;
+									{
+										std::lock_guard<std::mutex> lock(bet_uid_mutex);
+										update_bet_uid = bet_uid;
+									}
+									MetaData meta_data_lbu(config.key_bet_uid, std::to_string(update_bet_uid));
+									// запишем мета-данные
+									replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
+									replace_db(meta_data_lbu, sqlite_transaction, stmt_replace_meta_data);
+								}
+								// очистим флаг flush
+								is_flush = false;
+							},
+							[&]() {
+								// вышло время ожидания
+								if (timer_meta_data.get_elapsed() >= config.meta_data_time) {
+									timer_meta_data.reset();
+									// читаем мета-данные
+									const std::string value = get_meta_data_db(stmt_get_meta_data, config.key_update_date).value;
+									try {
+										if (!value.empty()) last_update_date = std::stoll(value);
+									} catch(...) {
+										last_update_date = ztime::get_timestamp();
+									};
+								}
+								if (!buffer.empty() && timer.get_elapsed() >= config.idle_time) {
+									timer.reset();
+									// запишем данные
+									replace_db(buffer, sqlite_transaction, stmt_replace_bet);
+									buffer.clear();
+									// обновим мета-данные
+									last_update_date = ztime::get_timestamp();
+									MetaData meta_data_ut(config.key_update_date, std::to_string(last_update_date));
+									int64_t update_bet_uid = 0;
+									{
+										std::lock_guard<std::mutex> lock(bet_uid_mutex);
+										update_bet_uid = bet_uid;
+									}
+									MetaData meta_data_lbu(config.key_bet_uid, std::to_string(update_bet_uid));
+									// запишем мета-данные
+									replace_db(meta_data_ut, sqlite_transaction, stmt_replace_meta_data);
+									replace_db(meta_data_lbu, sqlite_transaction, stmt_replace_meta_data);
+								}
+								// очистим флаг flush
+								is_flush = false;
+							});
+				} // while
+				// очистим флаг flush
+				is_flush = false;
 			});
 		}
 
-		inline void init_last_bet_uid() noexcept {
-            // инициализируем UID
-            std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
-            const std::string value = get_meta_data_db(stmt_get_meta_data, "last-bet-uid").value;
-            if (!value.empty()) {
-                last_bet_uid = std::stoll(value) + 1;
-            } else {
-                last_bet_uid = 1;
-            }
+		/** \brief Инициализация версии
+		 */
+		inline void init_version() noexcept {
+			if (config.read_only) return;
+			MetaData meta_data_dbv(config.key_db_version, config.db_version);
+			replace_db(meta_data_dbv, sqlite_transaction, stmt_replace_meta_data);
+		}
+
+		/** \brief Инициализация времени
+		 */
+		inline void init_update_date() noexcept {
+			const std::string value = get_meta_data_db(stmt_get_meta_data, config.key_update_date).value;
+			try {
+				if (!value.empty()) {
+					last_update_date = std::stoll(value);
+				} else {
+					last_update_date = 0;
+				}
+			} catch(...) {
+				last_update_date = 0;
+			}
+		}
+
+		/** \brief Инициализация UID
+		 */
+		inline void init_bet_uid() noexcept {
+			std::lock_guard<std::mutex> lock(bet_uid_mutex);
+			const std::string value = get_meta_data_db(stmt_get_meta_data, config.key_bet_uid).value;
+			try {
+				if (!value.empty()) {
+					bet_uid = std::stoll(value) + 1;
+				} else {
+					bet_uid = 1;
+				}
+			} catch(...) {
+				bet_uid = 1;
+			}
 		}
 
 		/** \brief Проверить инициализацию БД
 		 * \return Вернет true если БД было инициализирована
 		 */
 		const bool check_init_db() noexcept {
-			return (sqlite_db != nullptr);
+			return (sqlite_db);
 		}
 
 		/** \brief Добавить в запрос аргумент для фильтрации
@@ -755,13 +812,19 @@ namespace trading_db {
 
 		~BetDatabase() {
 			std::lock_guard<std::mutex> lock(method_mutex);
+			// отправляем сигнал на очистку буфера
 			is_flush = true;
+			bet_safe_queue.reset();
+			// ждем очистки
 			while (is_flush) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
+			// отправляем сигнал на выход из задачи
 			is_shutdown = true;
-			async_tasks.clear();
-			if (sqlite_db != nullptr) sqlite3_close_v2(sqlite_db);
+			bet_safe_queue.reset();
+			async_tasks.wait();
+			// закрываем соединение
+			if (sqlite_db) sqlite3_close_v2(sqlite_db);
 		}
 
 		/** \brief Открыть БД
@@ -774,26 +837,25 @@ namespace trading_db {
 			if (check_init_db()) return false;
 			if (init_db(path, readonly)) {
 				main_task();
-				init_last_bet_uid(); // инициализируем UID
 				return true;
 			}
 			return false;
 		}
 
-        /** \brief Получить последнюю метку времени обновления БД
-         * \return Последняя метка времени обновления БД
-         */
+		/** \brief Получить последнюю метку времени обновления БД
+		 * \return Последняя метка времени обновления БД
+		 */
 		inline uint64_t get_last_update() noexcept {
-			return last_update_timestamp;
+			return last_update_date;
 		}
 
 		/** \brief Получить уникальный номер сделки
 		 * \return Вернет уникальный номер сделки
 		 */
 		inline int64_t get_bet_uid() noexcept {
-			std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
-			const int64_t temp = last_bet_uid;
-			++last_bet_uid;
+			std::lock_guard<std::mutex> lock(bet_uid_mutex);
+			const int64_t temp = bet_uid;
+			++bet_uid;
 			return temp;
 		}
 
@@ -804,16 +866,12 @@ namespace trading_db {
 		 */
 		bool replace_bet(BetData &bet_data) noexcept {
 			if (config.read_only) return false;
-			{
-				std::lock_guard<std::mutex> lock(method_mutex);
-				if (!check_init_db()) return false;
-			}
+			std::lock_guard<std::mutex> lock(method_mutex);
+			if (!check_init_db()) return false;
 			// проверяем данные на валидность
 			if (bet_data.open_date <= 0) return false;
 			if (bet_data.uid <= 0) bet_data.uid = get_bet_uid();
-			std::lock_guard<std::mutex> lock(write_buffer_mutex);
-			write_buffer.push_back(bet_data);
-			write_last_bet_uid = bet_data.uid;
+			bet_safe_queue.enqueue(bet_data);
 			return true;
 		}
 
@@ -824,6 +882,7 @@ namespace trading_db {
 			if (config.read_only) return;
 			std::lock_guard<std::mutex> lock(method_mutex);
 			is_flush = true;
+			bet_safe_queue.reset();
 			while (is_flush && !is_shutdown) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
@@ -932,7 +991,7 @@ namespace trading_db {
 					const uint32_t second_day = ztime::get_second_day(timestamp);
 					if ((request.start_time && request.start_time > second_day) ||
 					   (request.stop_time && request.stop_time < second_day)){
-                        buffer.erase(buffer.begin() + index);
+						buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -940,7 +999,7 @@ namespace trading_db {
 				if (request.min_amount || request.max_amount) {
 					if ((request.min_amount && request.min_amount > buffer[index].amount) ||
 					   (request.max_amount && request.max_amount < buffer[index].amount)){
-                        buffer.erase(buffer.begin() + index);
+						buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -948,7 +1007,7 @@ namespace trading_db {
 				if (request.min_payout || request.max_payout) {
 					if ((request.min_payout && request.min_payout > buffer[index].payout) ||
 					   (request.max_payout && request.max_payout < buffer[index].payout)){
-                        buffer.erase(buffer.begin() + index);
+						buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -956,7 +1015,7 @@ namespace trading_db {
 				if (request.min_ping || request.max_ping) {
 					if ((request.min_ping && request.min_ping > buffer[index].ping) ||
 					   (request.max_ping && request.max_ping < buffer[index].ping)){
-                        buffer.erase(buffer.begin() + index);
+						buffer.erase(buffer.begin() + index);
 						continue;
 					}
 				}
@@ -986,8 +1045,8 @@ namespace trading_db {
 					}
 				}
 
-				if ((!request.use_buy && buffer[index].contract_type == ContractTypes::BUY) ||
-				   (!request.use_sell && buffer[index].contract_type == ContractTypes::SELL)) {
+				if ((!request.use_buy && buffer[index].contract_type == ContractType::BUY) ||
+				   (!request.use_sell && buffer[index].contract_type == ContractType::SELL)) {
 					buffer.erase(buffer.begin() + index);
 					continue;
 				}
@@ -1163,6 +1222,11 @@ namespace trading_db {
 			std::map<uint64_t, double> temp_balance;
 
 		public:
+
+			BetStats() {
+				clear();
+			}
+
 			// для фильтрации данных
 			std::vector<std::string>	brokers;
 			std::vector<std::string>	signals;
@@ -1176,7 +1240,7 @@ namespace trading_db {
 				ALL_BET,
 			};
 
-			int							stats_type	= ALL_BET;	///	 Тип статистики
+			int							stats_type	= ALL_BET;	///	 Тип статистики (первая сделка, последняя, все сделки)
 
 			// общая статистика
 			WinrateStats total_stats;
@@ -1184,38 +1248,49 @@ namespace trading_db {
 			WinrateStats total_sell_stats;
 
 			ChartData trades_profit;
+			ChartData day_profit;
 			ChartData trades_balance;
 			ChartData day_balance;
 			ChartData hour_balance;
 
-			ChartData symbol_winrate;
+			ChartData symbol_winrate;						/// Винрейт по символам
+			ChartData symbol_delas;							/// Сделки по символам
+			std::array<double,24> hour_winrate;
+			std::array<double,24> hour_delas;
 
-			double total_profit = 0;
-			double total_gain = 0;
+			double total_volume						= 0;	/// Общий объем сделок
+			double total_profit						= 0;	/// Общий профит
+			double total_gain						= 0;	/// Общий прирост
 
-			double max_drawdown				= 0;	/// Максимальная относительная просадка
-			double max_absolute_drawdown	= 0;	/// Максимальная абсолютная просадка
-			uint64_t max_drawdown_date		= 0;	/// Дата максимальной просадки
-			double aver_drawdown			= 0;	/// Средняя относительная просадка
+			double max_drawdown						= 0;	/// Максимальная относительная просадка
+			double max_absolute_drawdown			= 0;	/// Максимальная абсолютная просадка
+			uint64_t max_drawdown_date				= 0;	/// Дата максимальной просадки
+			double aver_drawdown					= 0;	/// Средняя относительная просадка
 
-			double aver_trade_size          = 0;
-			double aver_absolute_trade_size = 0;
+			double aver_trade_size					= 0;
+			double aver_absolute_trade_size			= 0;
 
-			double aver_profit_per_trade			= 0;	/// Средний профит на сделку
+			double aver_profit_per_trade			= 0;	/// Средний относительный профит на сделку
 			double aver_absolute_profit_per_trade	= 0;	/// Средний абсолютный профит на сделку
 			double max_absolute_profit_per_trade	= 0;	/// Максимальный абсолютный профит на сделку
 
-			double gross_profit		= 0;
-			double gross_loss		= 0;
-			double profit_factor	= 0;
+			double gross_profit						= 0;
+			double gross_loss						= 0;
+			double profit_factor					= 0;
+
+			// статистика профита
+			std::array<double,24> profit_24h;				/// Заивимость профита от часа дня
+			std::array<double,7>  profit_7wd;				/// Зависимость профита от дня недели
+			std::array<double,31> profit_31d;				/// Зависимость профита от дня месяца
+			std::array<double,12> profit_12m;				/// Зависимость профита от месяца года
 
 			inline void win(
 					const std::string &symbol,
-					const ContractTypes contract_type,
+					const ContractType contract_type,
 					const ztime::timestamp_t timestamp) noexcept {
 				total_stats.win();
 				stats_symbol[symbol].win();
-				if (contract_type == ContractTypes::BUY) {
+				if (contract_type == ContractType::BUY) {
 					total_buy_stats.win();
 				} else {
 					total_sell_stats.win();
@@ -1244,12 +1319,12 @@ namespace trading_db {
 
 			inline void loss(
 					const std::string &symbol,
-					const ContractTypes contract_type,
+					const ContractType contract_type,
 					const ztime::timestamp_t timestamp) noexcept {
 
 				total_stats.loss();
 				stats_symbol[symbol].loss();
-				if (contract_type == ContractTypes::BUY) {
+				if (contract_type == ContractType::BUY) {
 					total_buy_stats.loss();
 				} else {
 					total_sell_stats.loss();
@@ -1278,12 +1353,12 @@ namespace trading_db {
 
 			inline void standoff(
 					const std::string &symbol,
-					const ContractTypes contract_type,
+					const ContractType contract_type,
 					const ztime::timestamp_t timestamp) noexcept {
 
 				total_stats.standoff();
 				stats_symbol[symbol].standoff();
-				if (contract_type == ContractTypes::BUY) {
+				if (contract_type == ContractType::BUY) {
 					total_buy_stats.standoff();
 				} else {
 					total_sell_stats.standoff();
@@ -1315,8 +1390,8 @@ namespace trading_db {
 
 				stats_symbol.clear();
 				stats_temp_counter_bet.clear();
-				counter_bet_timestamp = 0;
-                counter_bet = 1;
+				counter_bet_timestamp	= 0;
+				counter_bet				= 1;
 
 				// статистика по периодам
 				stats_year.clear();
@@ -1334,27 +1409,35 @@ namespace trading_db {
 				total_sell_stats.clear();
 				// график
 				trades_profit.clear();
+				day_profit.clear();
 				trades_balance.clear();
 				day_balance.clear();
 				hour_balance.clear();
 				//
 				symbol_winrate.clear();
+				symbol_delas.clear();
 				// остальное
-				total_profit	= 0;
-				total_gain		= 0;
+				total_volume					= 0;
+				total_profit					= 0;
+				total_gain						= 0;
 
-				max_drawdown		  = 0;
-				max_absolute_drawdown = 0;
-				max_drawdown_date	  = 0;
-				aver_drawdown		  = 0;
+				max_drawdown					= 0;
+				max_absolute_drawdown			= 0;
+				max_drawdown_date				= 0;
+				aver_drawdown					= 0;
 
-				aver_profit_per_trade		   = 0;
-				aver_absolute_profit_per_trade = 0;
-				max_absolute_profit_per_trade  = 0;
+				aver_profit_per_trade			= 0;
+				aver_absolute_profit_per_trade	= 0;
+				max_absolute_profit_per_trade	= 0;
 
-				gross_profit	 = 0;
-				gross_loss		 = 0;
-				profit_factor	 = 0;
+				gross_profit					= 0;
+				gross_loss						= 0;
+				profit_factor					= 0;
+				//
+				std::fill(profit_24h.begin(),profit_24h.end(),0.0d);
+				std::fill(profit_7wd.begin(),profit_7wd.end(),0.0d);
+				std::fill(profit_31d.begin(),profit_31d.end(),0.0d);
+				std::fill(profit_12m.begin(),profit_12m.end(),0.0d);
 			}
 
 			template<class T>
@@ -1369,6 +1452,7 @@ namespace trading_db {
 					if (stats_type == FIRST_BET && bet.step != 0) continue;
 					if (stats_type == LAST_BET && !bet.last) continue;
 					if (!currency.empty() && bet.currency != currency) continue;
+
 					if (!brokers.empty()) {
 						bool found = false;
 						for (size_t i = 0; i < brokers.size(); ++i) {
@@ -1379,6 +1463,7 @@ namespace trading_db {
 						}
 						if (!found) continue;
 					}
+
 					if (!signals.empty()) {
 						bool found = false;
 						for (size_t i = 0; i < signals.size(); ++i) {
@@ -1389,17 +1474,32 @@ namespace trading_db {
 						}
 						if (!found) continue;
 					}
+
 					if (bet.demo && !use_demo) continue;
 					if (!bet.demo && !use_real) continue;
 					if (bet.amount == 0) continue;
 
 					const ztime::timestamp_t timestamp = bet.open_date / ztime::MILLISECONDS_IN_SECOND;
 					const ztime::timestamp_t end_timestamp = bet.close_date / ztime::MILLISECONDS_IN_SECOND;
+					const ztime::timestamp_t first_timestamp_day = ztime::get_first_timestamp_day(timestamp);
+					const size_t hour = ztime::get_hour_day(timestamp);
+					const size_t weekday = ztime::get_weekday(timestamp);
+					const size_t day_month = ztime::get_day_month(timestamp);
+					const size_t month = ztime::get_day_month(timestamp);
+
 					if (bet.status == BetStatus::WIN) {
 						win(bet.symbol, bet.contract_type, timestamp);
 						profit += bet.profit;
+
 						trades_profit.y_data.push_back(profit);
 						trades_profit.x_data.push_back(timestamp);
+
+						if (day_profit.x_data.empty() || day_profit.x_data.back() != first_timestamp_day) {
+							day_profit.x_data.push_back(first_timestamp_day);
+							day_profit.y_data.push_back(bet.profit);
+						} else {
+							day_profit.y_data.back() += bet.profit;
+						}
 
 						if (temp_balance.find(timestamp) == temp_balance.end()) {
 							temp_balance[timestamp] = -bet.amount;
@@ -1415,17 +1515,32 @@ namespace trading_db {
 						aver_profit_per_trade += bet.profit / bet.amount;
 						aver_absolute_profit_per_trade += bet.profit;
 						++counter_bet;
+						if (bet.profit > max_absolute_profit_per_trade) max_absolute_profit_per_trade = bet.profit;
 
 						gross_profit += bet.profit;
 						total_profit += bet.profit;
+						total_volume += bet.amount;
+
+						profit_24h[hour] += bet.profit;
+						profit_7wd[weekday] += bet.profit;
+						profit_31d[day_month] += bet.profit;
+						profit_12m[month] += bet.profit;
 
 						aver_absolute_trade_size += bet.amount;
 					} else
 					if (bet.status == BetStatus::LOSS) {
 						loss(bet.symbol, bet.contract_type, timestamp);
 						profit -= bet.amount;
+
 						trades_profit.y_data.push_back(profit);
 						trades_profit.x_data.push_back(timestamp);
+
+						if (day_profit.x_data.empty() || day_profit.x_data.back() != first_timestamp_day) {
+							day_profit.x_data.push_back(first_timestamp_day);
+							day_profit.y_data.push_back(-bet.amount);
+						} else {
+							day_profit.y_data.back() += -bet.amount;
+						}
 
 						if (temp_balance.find(timestamp) == temp_balance.end()) {
 							temp_balance[timestamp] = -bet.amount;
@@ -1444,14 +1559,26 @@ namespace trading_db {
 
 						gross_loss += bet.amount;
 						total_profit -= bet.amount;
+						total_volume += bet.amount;
+
+						profit_24h[hour] -= bet.amount;
+						profit_7wd[weekday] -= bet.amount;
+						profit_31d[day_month] -= bet.amount;
+						profit_12m[month] -= bet.amount;
 
 						aver_absolute_trade_size += bet.amount;
 					} else
 					if (bet.status == BetStatus::STANDOFF) {
 						standoff(bet.symbol, bet.contract_type, timestamp);
+
 						profit += 0;
 						trades_profit.y_data.push_back(profit);
 						trades_profit.x_data.push_back(timestamp);
+
+						if (day_profit.x_data.empty() || day_profit.x_data.back() != first_timestamp_day) {
+							day_profit.x_data.push_back(first_timestamp_day);
+							day_profit.y_data.push_back(0);
+						}
 
 						if (temp_balance.find(timestamp) == temp_balance.end()) {
 							temp_balance[timestamp] = -bet.amount;
@@ -1463,12 +1590,18 @@ namespace trading_db {
 						} else {
 							temp_balance[end_timestamp] += bet.amount;
 						}
-						aver_profit_per_trade += 0.0;
-						aver_absolute_profit_per_trade += 0;
+						//aver_profit_per_trade += 0.0;
+						//aver_absolute_profit_per_trade += 0;
 						++counter_bet;
 
-						gross_loss += 0;
-						total_profit += 0;
+						//gross_loss += 0;
+						//total_profit += 0;
+						total_volume += bet.amount;
+
+						//profit_24h[hour] += 0;
+						//profit_7wd[weekday] += 0;
+						//profit_31d[day_month] += 0;
+						//profit_12m[month] += 0;
 
 						aver_absolute_trade_size += bet.amount;
 					}
@@ -1536,14 +1669,19 @@ namespace trading_db {
 					total_gain = balance / start_balance;
 				} // if (!temp_balance.empty() && start_balance != 0)
 
-                total_stats.calc();
-                total_buy_stats.calc();
-                total_sell_stats.calc();
+				total_stats.calc();
+				total_buy_stats.calc();
+				total_sell_stats.calc();
 
-                for (auto &item : stats_symbol) {
-                    symbol_winrate.x_label.push_back(item.first);
-                    symbol_winrate.y_data.push_back(item.second.winrate * 100);
-                }
+				//> винрейт по символам
+				for (auto &item : stats_symbol) {
+					item.second.calc();
+					symbol_winrate.x_label.push_back(item.first);
+					symbol_winrate.y_data.push_back(item.second.winrate * 100);
+					symbol_delas.x_label.push_back(item.first);
+					symbol_delas.y_data.push_back(item.second.deals);
+				} //<
+
 			}
 		}; // BetStats
 
@@ -1558,9 +1696,9 @@ namespace trading_db {
 			bool						real		= false;
 			bool						demo		= false;
 
-			std::vector<BetStats>       currency_stats;
-			std::vector<BetStats>       signals_stats;
-			std::vector<BetStats>       brokers_stats;
+			std::vector<BetStats>		currency_stats;
+			std::vector<BetStats>		signals_stats;
+			std::vector<BetStats>		brokers_stats;
 
 			template<class T>
 			void calc(const T &bets) noexcept {
@@ -1589,20 +1727,20 @@ namespace trading_db {
 				signals_stats.resize(currencies.size() * signals.size());
 				brokers_stats.resize(currencies.size() * brokers.size());
 
-                for (size_t c = 0; c < currencies.size(); ++c) {
-                    currency_stats[c].currency = currencies[c];
-                    currency_stats[c].calc(bets, 0);
-                    for (size_t s = 0; s < signals.size(); ++s) {
-                        signals_stats[c+s*currencies.size()].currency = currencies[c];
-                        signals_stats[c+s*currencies.size()].signals.push_back(signals[s]);
-                        signals_stats[c+s*currencies.size()].calc(bets, 0);
-                    }
-                    for (size_t b = 0; b < brokers.size(); ++b) {
-                        brokers_stats[c+b*currencies.size()].currency = currencies[c];
-                        brokers_stats[c+b*currencies.size()].brokers.push_back(brokers[b]);
-                        brokers_stats[c+b*currencies.size()].calc(bets, 0);
-                    }
-                }
+				for (size_t c = 0; c < currencies.size(); ++c) {
+					currency_stats[c].currency = currencies[c];
+					currency_stats[c].calc(bets, 0);
+					for (size_t s = 0; s < signals.size(); ++s) {
+						signals_stats[c+s*currencies.size()].currency = currencies[c];
+						signals_stats[c+s*currencies.size()].signals.push_back(signals[s]);
+						signals_stats[c+s*currencies.size()].calc(bets, 0);
+					}
+					for (size_t b = 0; b < brokers.size(); ++b) {
+						brokers_stats[c+b*currencies.size()].currency = currencies[c];
+						brokers_stats[c+b*currencies.size()].brokers.push_back(brokers[b]);
+						brokers_stats[c+b*currencies.size()].calc(bets, 0);
+					}
+				}
 			}
 		}; // MetaBetStats
 	};

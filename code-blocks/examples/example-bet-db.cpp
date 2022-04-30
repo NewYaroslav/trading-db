@@ -9,7 +9,7 @@ int main() {
         trading_db::BetDatabase bet_db;
         bet_db.config.use_log = true;
 
-        std::cout << bet_db.init(path) << std::endl;
+        std::cout << bet_db.open(path) << std::endl;
 
         std::cout << "#remove_all" << std::endl;
         std::cout << bet_db.remove_all() << std::endl;
@@ -27,8 +27,8 @@ int main() {
             bet.duration = 60 * (i / 100);
             bet.close_date = bet.open_date + bet.duration;
             bet.comment = "test";
-            if (i % 2 == 0) bet.contract_type = trading_db::BetDatabase::ContractTypes::BUY;
-            else bet.contract_type = trading_db::BetDatabase::ContractTypes::SELL;
+            if (i % 2 == 0) bet.contract_type = trading_db::BetDatabase::ContractType::BUY;
+            else bet.contract_type = trading_db::BetDatabase::ContractType::SELL;
             bet.currency = "USD";
             bet.delay = 50 + i * 10;
             bet.ping = 100 + i * 10;
@@ -44,7 +44,7 @@ int main() {
             bet.step = 0;
             if ((i + 4) % 3 == 0) bet.symbol = "EURCAD";
             else bet.symbol = "AUDCAD";
-            bet.type = trading_db::BetDatabase::BoTypes::SPRINT;
+            bet.type = trading_db::BetDatabase::BoType::SPRINT;
             bet.user_data = "12345";
             bet.uid = bet_db.get_bet_uid();
 
@@ -57,6 +57,8 @@ int main() {
         }
         std::cout << "#flush" << std::endl;
         bet_db.flush();
+
+        std::system("pause");
 
         std::cout << "#get_bets" << std::endl;
 
@@ -99,13 +101,15 @@ int main() {
         std::cout << "read_bets size " << read_bets.size() << std::endl;
 
         std::cout << "#end" << std::endl;
+        std::system("pause");
     }
+    std::system("pause");
     std::cout << "#test-2" << std::endl << std::endl;
     {
         trading_db::BetDatabase bet_db;
         bet_db.config.use_log = true;
 
-        std::cout << bet_db.init(path) << std::endl;
+        std::cout << bet_db.open(path) << std::endl;
 
         std::cout << "#remove_all" << std::endl;
         std::cout << bet_db.remove_all() << std::endl;
@@ -123,8 +127,8 @@ int main() {
             bet.duration = 60 * (i / 100);
             bet.close_date = bet.open_date + bet.duration;
             bet.comment = "test";
-            if (i % 2 == 0) bet.contract_type = trading_db::BetDatabase::ContractTypes::BUY;
-            else bet.contract_type = trading_db::BetDatabase::ContractTypes::SELL;
+            if (i % 2 == 0) bet.contract_type = trading_db::BetDatabase::ContractType::BUY;
+            else bet.contract_type = trading_db::BetDatabase::ContractType::SELL;
             bet.currency = "USD";
             bet.delay = 50 + i * 10;
             bet.ping = 100 + i * 10;
@@ -140,7 +144,7 @@ int main() {
             bet.step = 0;
             if ((i + 4) % 3 == 0) bet.symbol = "EURCAD";
             else bet.symbol = "AUDCAD";
-            bet.type = trading_db::BetDatabase::BoTypes::SPRINT;
+            bet.type = trading_db::BetDatabase::BoType::SPRINT;
             bet.user_data = "12345";
             bet.uid = bet_db.get_bet_uid();
             bets.push_back(bet);
