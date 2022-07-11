@@ -13,7 +13,7 @@ int main() {
         std::cout << bet_db.open(path) << std::endl;
 
         std::cout << "#remove_all" << std::endl;
-        //std::cout << bet_db.remove_all() << std::endl;
+        std::cout << bet_db.remove_all() << std::endl;
 
         using bet_t = trading_db::BetDatabase::BetData;
 
@@ -22,10 +22,11 @@ int main() {
         std::uniform_int_distribution<int> dist_amount(1,700);
         std::uniform_int_distribution<int> dist_broker(0,1);
         std::uniform_int_distribution<int> dist_timestamp(60,24*3600);
+        //std::uniform_int_distribution<int> dist_timestamp(24*3600,24*3600*30);
         std::uniform_int_distribution<int> dist_duration(1,30);
         std::uniform_int_distribution<int> dist_contract_type(0,1);
         std::uniform_int_distribution<int> dist_currency(0, 1);
-        std::uniform_int_distribution<int> dist_winrate(1,100);
+        std::uniform_int_distribution<int> dist_winrate(1,1000);
         std::uniform_int_distribution<int> dist_ping(150,5000);
         std::uniform_int_distribution<int> dist_signal(0,2);
         std::uniform_int_distribution<int> dist_symbol(0,9);
@@ -33,7 +34,7 @@ int main() {
         std::uniform_int_distribution<int> dist_payout(60, 85);
         std::uniform_int_distribution<int> dist_demo(0,1);
 
-        ztime::timestamp_t timestamp = ztime::get_timestamp(01,01,2019,0,0,0);
+        ztime::timestamp_t timestamp = ztime::get_timestamp(01,01,2106,0,0,0);
 
         std::cout << "#fill data" << std::endl;
         std::vector<bet_t> bets;
@@ -66,12 +67,13 @@ int main() {
             }
 
             const int signal = dist_signal(rng);
-            const int tw = signal == 0 ? 60 : signal == 1 ? 65 : 58;
+            const int tw = signal == 0 ? 70 : signal == 1 ? 80 : 84;
+
             const int w = dist_winrate(rng);
-            if (w < 3) {
+            if (w < 2) {
                 bet.status = trading_db::BetDatabase::BetStatus::STANDOFF;
             } else
-            if (w < tw) {
+            if (w < (10*tw)) {
                 bet.status = trading_db::BetDatabase::BetStatus::WIN;
             } else {
                 bet.status = trading_db::BetDatabase::BetStatus::LOSS;
@@ -190,7 +192,7 @@ int main() {
         std::cout << "read_bets size " << read_bets.size() << std::endl;
 
         std::cout << "#meta_bets" << std::endl;
-        trading_db::BetDatabase::MetaBetStats meta_bets;
+        trading_db::BetDatabase::BetMetaStats meta_bets;
         meta_bets.calc(read_bets);
 
         std::cout << "#currencies" << std::endl;
@@ -219,6 +221,9 @@ int main() {
         std::cout << "#bet_stats.total_gain " << bet_stats.total_gain << std::endl;
         std::cout << "#bet_stats.total_profit " << bet_stats.total_profit << std::endl;
         std::cout << "#aver_absolute_profit_per_trade " << bet_stats.aver_absolute_profit_per_trade << std::endl;
+        std::cout << "#z-score = " << bet_stats.z_score.value << std::endl;
+        std::cout << "#z-score total trades  = " << bet_stats.z_score.total_trades << std::endl;
+
 
 
 

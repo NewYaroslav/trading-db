@@ -7,11 +7,16 @@
 #endif
 
 #include "config.hpp"
+#include "parts/bet-database-common.hpp"
+#include "parts/bet-database-stats.hpp"
+#include "parts/bet-database-meta-stats.hpp"
+
 #include "utility/sqlite-func.hpp"
 #include "utility/async-tasks.hpp"
 #include "utility/safe-queue.hpp"
 #include "utility/print.hpp"
 #include "utility/files.hpp"
+
 #include <ztime.hpp>
 #include <mutex>
 #include <atomic>
@@ -46,6 +51,11 @@ namespace trading_db {
 
 		Config config;	/**< Конфигурация БД */
 
+		using ContractType = bet_database::ContractType;
+		using BoType = bet_database::BoType;
+		using BetStatus = bet_database::BetStatus;
+		using BetData = bet_database::BetData;
+#if(0)
 		/// Направление ставки
 		enum class ContractType {
 			UNKNOWN_STATE = 0,
@@ -111,7 +121,7 @@ namespace trading_db {
 
 			BetData() {};
 		};
-
+#endif
 	private:
 		std::string database_name;
 		sqlite3 *sqlite_db = nullptr;
@@ -1138,7 +1148,7 @@ namespace trading_db {
 		}
 
 		//----------------------------------------------------------------------
-
+#if (0)
 		/** \brief Статистика ставок
 		 */
 		class BetStats {
@@ -1684,7 +1694,11 @@ namespace trading_db {
 
 			}
 		}; // BetStats
+#endif
+		using BetStats = bet_database::BetStats;
+		using BetMetaStats = bet_database::BetMetaStats;
 
+		#if (0)
 		/** \brief Класс для получения сведений о данных массива сделок
 		 */
 		class MetaBetStats {
@@ -1706,6 +1720,7 @@ namespace trading_db {
 				std::set<std::string> calc_brokers;
 				std::set<std::string> calc_signals;
 				std::set<std::string> calc_symbols;
+
 				for (auto &bet : bets) {
 					calc_currencies.insert(bet.currency);
 					calc_brokers.insert(bet.broker);
@@ -1714,22 +1729,41 @@ namespace trading_db {
 					if (bet.demo) demo = true;
 					else real = true;
 				}
+
 				brokers = std::vector<std::string>(calc_brokers.begin(), calc_brokers.end());
 				currencies = std::vector<std::string>(calc_currencies.begin(), calc_currencies.end());
 				signals = std::vector<std::string>(calc_signals.begin(), calc_signals.end());
 				symbols = std::vector<std::string>(calc_symbols.begin(), calc_symbols.end());
 
+				std::cout << "-brokers" << brokers.size() << std::endl;
+				std::cout << "-currencies" << currencies.size() << std::endl;
+				std::cout << "-signals" << signals.size() << std::endl;
+				std::cout << "-symbols" << symbols.size() << std::endl;
+
 				currency_stats.clear();
 				signals_stats.clear();
 				brokers_stats.clear();
 
+				std::cout << "-currency_stats.resize" << std::endl;
 				currency_stats.resize(currencies.size());
+				std::cout << "-currency_stats.size " << currency_stats.size() << std::endl;
+				std::cout << "-signals_stats.resize" << std::endl;
 				signals_stats.resize(currencies.size() * signals.size());
+				std::cout << "-brokers_stats.resize" << std::endl;
 				brokers_stats.resize(currencies.size() * brokers.size());
+				std::cout << "-for" << std::endl;
+
 
 				for (size_t c = 0; c < currencies.size(); ++c) {
+					std::cout << "-2: " << c << " " << currencies[c] << std::endl;
 					currency_stats[c].currency = currencies[c];
+
+					std::cout << "-3: " << c << std::endl;
+					//std::cout << "-3: " << currency_stats[c]. << std::endl;
 					currency_stats[c].calc(bets, 0);
+					std::cout << "-4: " << c << std::endl;
+					/*
+					std::cout << "-4: " << c << std::endl;
 					for (size_t s = 0; s < signals.size(); ++s) {
 						signals_stats[c+s*currencies.size()].currency = currencies[c];
 						signals_stats[c+s*currencies.size()].signals.push_back(signals[s]);
@@ -1740,9 +1774,11 @@ namespace trading_db {
 						brokers_stats[c+b*currencies.size()].brokers.push_back(brokers[b]);
 						brokers_stats[c+b*currencies.size()].calc(bets, 0);
 					}
+					*/
 				}
 			}
 		}; // MetaBetStats
+		#endif
 	};
 
 }; // trading_db

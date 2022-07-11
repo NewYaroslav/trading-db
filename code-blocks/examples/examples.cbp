@@ -183,6 +183,18 @@
 		<Unit filename="../../include/trading-db/int-key-blob-value-database.hpp" />
 		<Unit filename="../../include/trading-db/key-value-database.hpp" />
 		<Unit filename="../../include/trading-db/list-database.hpp" />
+		<Unit filename="../../include/trading-db/parts/bet-database-common.hpp">
+			<Option target="example-bet-db" />
+			<Option target="example-bet-db-generation-test-trades" />
+		</Unit>
+		<Unit filename="../../include/trading-db/parts/bet-database-meta-stats.hpp">
+			<Option target="example-bet-db" />
+			<Option target="example-bet-db-generation-test-trades" />
+		</Unit>
+		<Unit filename="../../include/trading-db/parts/bet-database-stats.hpp">
+			<Option target="example-bet-db" />
+			<Option target="example-bet-db-generation-test-trades" />
+		</Unit>
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
 		<Unit filename="../../include/trading-db/tick-database.hpp" />
 		<Unit filename="../../include/trading-db/utility/async-tasks.hpp" />

@@ -64,15 +64,17 @@ namespace trading_db {
 					const std::function<void(const T &value)> &on_item,
 					const std::function<void()> &on_reset = nullptr,
 					const std::function<void()> &on_timeout = nullptr) noexcept {
+				bool is_timeout = false;
 				{
 					std::unique_lock<std::mutex> locker(m);
-					if (	!c.wait_for(
-							locker,
-							std::chrono::milliseconds(delay_ms),
-							[&](){return !q.empty() || shutdown;})) {
-						if (on_timeout) on_timeout();
-						return false;
-					}
+					is_timeout = c.wait_for(
+						locker,
+						std::chrono::milliseconds(delay_ms),
+						[&](){return !q.empty() || shutdown;});
+				}
+				if (!is_timeout) {
+					if (on_timeout) on_timeout();
+					return false;
 				}
 				if (shutdown) {
 					if (on_reset) on_reset();
