@@ -50,24 +50,22 @@ namespace trading_db {
 				brokers_stats.clear();
 
 				currency_stats.resize(currencies.size());
-				signals_stats.resize(currencies.size() * signals.size());
-				brokers_stats.resize(currencies.size() * brokers.size());
+				signals_stats.resize(signals.size());
+				brokers_stats.resize(brokers.size());
 
 				for (size_t c = 0; c < currencies.size(); ++c) {
 					currency_stats[c].config.currency = currencies[c];
 					currency_stats[c].calc(bets, 0);
-
-					for (size_t s = 0; s < signals.size(); ++s) {
-						signals_stats[c+s*currencies.size()].config.currency = currencies[c];
-						signals_stats[c+s*currencies.size()].config.signals.push_back(signals[s]);
-						signals_stats[c+s*currencies.size()].calc(bets, 0);
-					}
-					for (size_t b = 0; b < brokers.size(); ++b) {
-						brokers_stats[c+b*currencies.size()].config.currency = currencies[c];
-						brokers_stats[c+b*currencies.size()].config.brokers.push_back(brokers[b]);
-						brokers_stats[c+b*currencies.size()].calc(bets, 0);
-					}
 				}
+
+				for (size_t s = 0; s < signals.size(); ++s) {
+                    signals_stats[s].config.signals.push_back(signals[s]);
+                    signals_stats[s].calc(bets, 0);
+                }
+                for (size_t b = 0; b < brokers.size(); ++b) {
+                    brokers_stats[b].config.brokers.push_back(brokers[b]);
+                    brokers_stats[b].calc(bets, 0);
+                }
 			}
 		}; // BetMetaStats
 	};
