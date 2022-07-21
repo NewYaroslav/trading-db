@@ -59,13 +59,13 @@ namespace trading_db {
 				}
 
 				for (size_t s = 0; s < signals.size(); ++s) {
-                    signals_stats[s].config.signals.push_back(signals[s]);
-                    signals_stats[s].calc(bets, 0);
-                }
-                for (size_t b = 0; b < brokers.size(); ++b) {
-                    brokers_stats[b].config.brokers.push_back(brokers[b]);
-                    brokers_stats[b].calc(bets, 0);
-                }
+					signals_stats[s].config.signals.push_back(signals[s]);
+					signals_stats[s].calc(bets, 0);
+				}
+				for (size_t b = 0; b < brokers.size(); ++b) {
+					brokers_stats[b].config.brokers.push_back(brokers[b]);
+					brokers_stats[b].calc(bets, 0);
+				}
 			}
 		}; // BetMetaStats
 	};

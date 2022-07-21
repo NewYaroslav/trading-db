@@ -190,6 +190,8 @@ namespace trading_db {
 
 			// статистика по парам
 			std::map<std::string, WinrateStats> stats_symbol;
+			// статистика по сигналам
+			std::map<std::string, WinrateStats> stats_signal;
 
 			// статистика по периодам
 			std::map<uint64_t, WinrateStats> stats_year;
@@ -251,7 +253,10 @@ namespace trading_db {
 			ChartData hour_balance;
 
 			ChartData symbol_winrate;						/// Винрейт по символам
-			ChartData symbol_delas;							/// Сделки по символам
+			ChartData symbol_trades;						/// Сделки по символам
+
+			ChartData signal_winrate;						/// Винрейт по сигналам
+			ChartData signal_trades;						/// Сделки по сигналам
 
 			double total_volume						= 0;	/// Общий объем сделок
 			double total_profit						= 0;	/// Общий профит
@@ -448,6 +453,9 @@ namespace trading_db {
 				temp_balance.clear();
 
 				stats_symbol.clear();
+
+				stats_signal.clear();
+
 				stats_temp_counter_bet.clear();
 				counter_bet_timestamp	= 0;
 				counter_bet				= 1;
@@ -474,7 +482,10 @@ namespace trading_db {
 				hour_balance.clear();
 				//
 				symbol_winrate.clear();
-				symbol_delas.clear();
+				symbol_trades.clear();
+				//
+				signal_winrate.clear();
+				signal_trades.clear();
 				// остальное
 				total_volume					= 0;
 				total_profit					= 0;
@@ -598,6 +609,8 @@ namespace trading_db {
 					if (bet.status == BetStatus::WIN) {
 						win(bet.symbol, bet.contract_type, timestamp);
 
+						stats_signal[bet.signal].win();
+
 						// считаем число серий
 						series_criterion.update(1, timestamp, end_timestamp);
 
@@ -659,6 +672,8 @@ namespace trading_db {
 					if (bet.status == BetStatus::LOSS) {
 						loss(bet.symbol, bet.contract_type, timestamp);
 
+						stats_signal[bet.signal].loss();
+
 						// считаем число серий
 						series_criterion.update(-1, timestamp, end_timestamp);
 
@@ -718,6 +733,8 @@ namespace trading_db {
 					} else
 					if (bet.status == BetStatus::STANDOFF) {
 						standoff(bet.symbol, bet.contract_type, timestamp);
+
+						stats_signal[bet.signal].standoff();
 
 						// считаем число серий
 						series_criterion.update(0, timestamp, end_timestamp);
@@ -906,8 +923,17 @@ namespace trading_db {
 					item.second.calc();
 					symbol_winrate.x_label.push_back(item.first);
 					symbol_winrate.y_data.push_back(item.second.winrate * 100);
-					symbol_delas.x_label.push_back(item.first);
-					symbol_delas.y_data.push_back(item.second.deals);
+					symbol_trades.x_label.push_back(item.first);
+					symbol_trades.y_data.push_back(item.second.deals);
+				} //<
+
+				//> винрейт по сигналам
+				for (auto &item : stats_signal) {
+					item.second.calc();
+					signal_winrate.x_label.push_back(item.first);
+					signal_winrate.y_data.push_back(item.second.winrate * 100);
+					signal_trades.x_label.push_back(item.first);
+					signal_trades.y_data.push_back(item.second.deals);
 				} //<
 
 			}
