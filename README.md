@@ -8,6 +8,7 @@
 * KeyValueDatabase в файле key-value-database.hpp 	- БД для хранения строковых пар ключ-значение
 * ListDatabase в файле list-database.hpp 			- БД для хранения уникальных или повторяющихся строковых значений
 * IntKeyBlobValueDatabase в файле int-key-blob-value-database.hpp - Шаблонный вспомогательный класс БД для хранения бинарных данных по целому ключу
+* QDB в файле qdb.hpp								- БД для хранения тиков и баров в сжатом виде.
 
-Примеры можно найти в code-blocks/examples
+Примеры можно найти в code-blocks/examples и code-blocks/qdb
 
