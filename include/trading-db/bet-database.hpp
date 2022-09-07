@@ -227,9 +227,6 @@ namespace trading_db {
 					"value				TEXT				NOT NULL)";
 			if (!utility::prepare(sqlite_db_ptr, create_bets_table_sql)) return false;
 			if (!utility::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
-			// std::lock_guard<std::mutex> lock(last_bet_uid_mutex);
-			// last_bet_uid = sqlite3_last_insert_rowid(sqlite_db_ptr);
-			// if (last_bet_uid <= 0) last_bet_uid = 1;
 			return true;
 		}
 
@@ -596,7 +593,7 @@ namespace trading_db {
 			return std::move(meta_data);
 		}
 
-		// основная задача (запись данных вБД) для фонового процесса
+		// основная задача (запись данных в БД) для фонового процесса
 		void main_task() {
 			init_version();
 			init_update_date();

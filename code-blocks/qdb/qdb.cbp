@@ -2,41 +2,12 @@
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
-		<Option title="examples" />
+		<Option title="qdb" />
 		<Option pch_mode="2" />
 		<Option compiler="mingw_64_7_3_0" />
 		<Build>
-			<Target title="example-list-db">
-				<Option output="example-list-db" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/Release/" />
-				<Option type="1" />
-				<Option compiler="mingw_64_7_3_0" />
-				<Compiler>
-					<Add option="-std=c++14" />
-					<Add option="-pg" />
-					<Add option="-Og" />
-					<Add option="-g" />
-					<Add option="-DSQLITE_THREADSAFE=1" />
-					<Add directory="../../lib/sqlite_orm/include" />
-					<Add directory="../../lib/sqlite-amalgamation-3340100" />
-					<Add directory="../../lib/ztime-cpp/src" />
-					<Add directory="../../lib/siphash-hpp/include/siphash-hpp" />
-					<Add directory="../../include" />
-				</Compiler>
-				<Linker>
-					<Add option="-pg -lgmon" />
-					<Add option="-static-libstdc++" />
-					<Add option="-static-libgcc" />
-					<Add option="-static" />
-					<Add directory="../../lib/sqlite_orm/include" />
-					<Add directory="../../lib/sqlite-amalgamation-3340100" />
-					<Add directory="../../lib/ztime-cpp/src" />
-					<Add directory="../../lib/siphash-hpp/include/siphash-hpp" />
-					<Add directory="../../include" />
-				</Linker>
-			</Target>
-			<Target title="example-key-value-db">
-				<Option output="example-key-value-db" prefix_auto="1" extension_auto="1" />
+			<Target title="compact-dataset">
+				<Option output="compact-dataset" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -62,8 +33,8 @@
 					<Add directory="../../include" />
 				</Linker>
 			</Target>
-			<Target title="example-int-key-blob-value-db">
-				<Option output="example-int-key-blob-value-db" prefix_auto="1" extension_auto="1" />
+			<Target title="price-buffer">
+				<Option output="price-buffer" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -89,8 +60,8 @@
 					<Add directory="../../include" />
 				</Linker>
 			</Target>
-			<Target title="example-qdb-compact-dataset">
-				<Option output="example-qdb-compact-dataset" prefix_auto="1" extension_auto="1" />
+			<Target title="csv-data-preparation">
+				<Option output="csv-data-preparation" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -103,21 +74,26 @@
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Compiler>
 				<Linker>
 					<Add option="-pg -lgmon" />
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
+					<Add library="zstd" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Linker>
 			</Target>
-			<Target title="example-bet-db">
-				<Option output="example-bet-db" prefix_auto="1" extension_auto="1" />
+			<Target title="dictionary-ticks-train-zstd">
+				<Option output="dictionary-ticks-train-zstd" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -130,21 +106,26 @@
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Compiler>
 				<Linker>
 					<Add option="-pg -lgmon" />
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
+					<Add library="zstd" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Linker>
 			</Target>
-			<Target title="example-bet-db-generation-test-trades">
-				<Option output="example-bet-db" prefix_auto="1" extension_auto="1" />
+			<Target title="csv-data-preparation-2">
+				<Option output="csv-data-preparation-2" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -157,21 +138,26 @@
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Compiler>
 				<Linker>
 					<Add option="-pg -lgmon" />
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
+					<Add library="zstd" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Linker>
 			</Target>
-			<Target title="example-qdb-price-buffer">
-				<Option output="example-qdb-price-buffer" prefix_auto="1" extension_auto="1" />
+			<Target title="dictionary-ticks-train-zstd-2">
+				<Option output="dictionary-ticks-train-zstd" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -184,21 +170,154 @@
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Compiler>
 				<Linker>
 					<Add option="-pg -lgmon" />
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
+					<Add library="zstd" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
+					<Add directory="../../lib" />
 				</Linker>
 			</Target>
-			<Target title="example-qdb-csv">
-				<Option output="example-qdb-csv" prefix_auto="1" extension_auto="1" />
+			<Target title="data-preparation-check">
+				<Option output="dictionary-ticks-train-zstd" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Linker>
+			</Target>
+			<Target title="data-preparation-check-2">
+				<Option output="dictionary-ticks-train-zstd" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Linker>
+			</Target>
+			<Target title="storage">
+				<Option output="storage" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Linker>
+			</Target>
+			<Target title="test-qdb">
+				<Option output="test-qdb" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Linker>
+			</Target>
+			<Target title="test-qdb-2">
+				<Option output="test-qdb-2" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -235,68 +354,98 @@
 			<Add option="-fexceptions" />
 		</Compiler>
 		<Unit filename="../../include/trading-db/bet-database.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
 		<Unit filename="../../include/trading-db/config.hpp" />
 		<Unit filename="../../include/trading-db/int-key-blob-value-database.hpp" />
 		<Unit filename="../../include/trading-db/key-value-database.hpp" />
 		<Unit filename="../../include/trading-db/list-database.hpp" />
 		<Unit filename="../../include/trading-db/parts/bet-database-common.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/bet-database-meta-stats.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/bet-database-stats.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/files.hpp" />
-		<Unit filename="../../include/trading-db/parts/qdb-common.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-compact-candles-dataset.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
+		<Unit filename="../../include/trading-db/parts/qdb-common.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb-compact-candles-dataset.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb-compact-dataset.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-csv" />
+			<Option target="compact-dataset" />
+			<Option target="csv-data-preparation" />
+			<Option target="dictionary-ticks-train-zstd" />
+			<Option target="csv-data-preparation-2" />
+			<Option target="dictionary-ticks-train-zstd-2" />
+			<Option target="data-preparation-check" />
+			<Option target="data-preparation-check-2" />
+			<Option target="storage" />
+			<Option target="test-qdb" />
+			<Option target="test-qdb-2" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-compact-ticks-dataset.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-csv" />
+			<Option target="compact-dataset" />
+			<Option target="csv-data-preparation" />
+			<Option target="dictionary-ticks-train-zstd" />
+			<Option target="csv-data-preparation-2" />
+			<Option target="dictionary-ticks-train-zstd-2" />
+			<Option target="data-preparation-check" />
+			<Option target="data-preparation-check-2" />
+			<Option target="storage" />
+			<Option target="test-qdb" />
+			<Option target="test-qdb-2" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-csv.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-csv" />
+			<Option target="compact-dataset" />
+			<Option target="csv-data-preparation" />
+			<Option target="dictionary-ticks-train-zstd" />
+			<Option target="csv-data-preparation-2" />
+			<Option target="dictionary-ticks-train-zstd-2" />
+			<Option target="data-preparation-check" />
+			<Option target="data-preparation-check-2" />
+			<Option target="storage" />
+			<Option target="test-qdb" />
+			<Option target="test-qdb-2" />
 		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-price-buffer.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
+		<Unit filename="../../include/trading-db/parts/qdb-data-preparation.hpp">
+			<Option target="dictionary-ticks-train-zstd-2" />
+			<Option target="data-preparation-check" />
+			<Option target="data-preparation-check-2" />
+			<Option target="storage" />
+			<Option target="test-qdb" />
+			<Option target="test-qdb-2" />
 		</Unit>
+		<Unit filename="../../include/trading-db/parts/qdb-dictionary-candles.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb-dictionary-ticks.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb-price-buffer.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb-storage.hpp">
-			<Option target="example-qdb-price-buffer" />
+			<Option target="price-buffer" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-writer-price-buffer.hpp">
-			<Option target="example-qdb-csv" />
+			<Option target="csv-data-preparation" />
+			<Option target="dictionary-ticks-train-zstd" />
+			<Option target="csv-data-preparation-2" />
+			<Option target="dictionary-ticks-train-zstd-2" />
+			<Option target="data-preparation-check" />
+			<Option target="data-preparation-check-2" />
+			<Option target="storage" />
+			<Option target="test-qdb" />
+			<Option target="test-qdb-2" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-zstd.hpp">
-			<Option target="example-qdb-csv" />
+			<Option target="csv-data-preparation" />
+			<Option target="dictionary-ticks-train-zstd" />
+			<Option target="csv-data-preparation-2" />
+			<Option target="dictionary-ticks-train-zstd-2" />
+			<Option target="data-preparation-check" />
+			<Option target="data-preparation-check-2" />
+			<Option target="storage" />
+			<Option target="test-qdb" />
+			<Option target="test-qdb-2" />
 		</Unit>
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
-		<Unit filename="../../include/trading-db/qdb.hpp">
-			<Option target="example-qdb-compact-dataset" />
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
+		<Unit filename="../../include/trading-db/qdb.hpp" />
 		<Unit filename="../../include/trading-db/tick-database.hpp" />
 		<Unit filename="../../include/trading-db/utility/async-tasks.hpp" />
 		<Unit filename="../../include/trading-db/utility/compact_candles_dataset.hpp" />
@@ -307,7 +456,7 @@
 		<Unit filename="../../include/trading-db/utility/safe-queue.hpp" />
 		<Unit filename="../../include/trading-db/utility/sqlite-func.hpp" />
 		<Unit filename="../../lib/siphash-hpp/include/siphash-hpp/siphash.hpp">
-			<Option target="example-list-db" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
 		<Unit filename="../../lib/sqlite-amalgamation-3340100/sqlite3.c">
 			<Option compilerVar="CC" />
@@ -319,29 +468,39 @@
 		<Unit filename="../../lib/ztime-cpp/src/ztime.cpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime.hpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime_ntp.hpp" />
-		<Unit filename="example-bet-db-generation-test.cpp">
-			<Option target="example-bet-db-generation-test-trades" />
+		<Unit filename="compact-dataset.cpp">
+			<Option target="compact-dataset" />
 		</Unit>
-		<Unit filename="example-bet-db.cpp">
-			<Option target="example-bet-db" />
+		<Unit filename="csv-data-preparation-2.cpp">
+			<Option target="compact-dataset" />
+			<Option target="price-buffer" />
+			<Option target="csv-data-preparation-2" />
 		</Unit>
-		<Unit filename="example-int-key-blob-value-db.cpp">
-			<Option target="example-int-key-blob-value-db" />
+		<Unit filename="csv-data-preparation.cpp">
+			<Option target="csv-data-preparation" />
 		</Unit>
-		<Unit filename="example-key-value-db.cpp">
-			<Option target="example-key-value-db" />
+		<Unit filename="data-preparation-check-2.cpp">
+			<Option target="data-preparation-check-2" />
 		</Unit>
-		<Unit filename="example-list-db.cpp">
-			<Option target="example-list-db" />
+		<Unit filename="data-preparation-check.cpp">
+			<Option target="data-preparation-check" />
 		</Unit>
-		<Unit filename="example-qdb-compact-dataset.cpp">
-			<Option target="example-qdb-compact-dataset" />
+		<Unit filename="dictionary-ticks-train-zstd-2.cpp">
+			<Option target="compact-dataset" />
+			<Option target="price-buffer" />
+			<Option target="dictionary-ticks-train-zstd-2" />
 		</Unit>
-		<Unit filename="example-qdb-csv.cpp">
-			<Option target="example-qdb-csv" />
+		<Unit filename="dictionary-ticks-train-zstd.cpp">
+			<Option target="dictionary-ticks-train-zstd" />
 		</Unit>
-		<Unit filename="example-qdb-price-buffer.cpp">
-			<Option target="example-qdb-price-buffer" />
+		<Unit filename="storage.cpp">
+			<Option target="storage" />
+		</Unit>
+		<Unit filename="test-qdb-2.cpp">
+			<Option target="test-qdb-2" />
+		</Unit>
+		<Unit filename="test-qdb.cpp">
+			<Option target="test-qdb" />
 		</Unit>
 		<Extensions>
 			<lib_finder disable_auto="1" />

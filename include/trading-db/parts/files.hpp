@@ -75,7 +75,7 @@ namespace trading_db {
             return file_size;
         }
 
-		/** \brief Разобрать путь на составляющие
+        /** \brief Разобрать путь на составляющие
 		 * Данная функция парсит путь, например C:/Users\\user/Downloads разложит на
 		 * C:, Users, user и Downloads
 		 * \param path путь, который надо распарсить
@@ -102,7 +102,7 @@ namespace trading_db {
 			}
 		}
 
-		/** \brief Установить или изменить расширение файла
+        /** \brief Установить или изменить расширение файла
          * \param path Путь к файлу
          * \param file_extension новое расширение файла
          * \param separator Символ разделителя

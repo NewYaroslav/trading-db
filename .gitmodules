@@ -13,3 +13,6 @@
 [submodule "lib/siphash-hpp"]
 	path = lib/siphash-hpp
 	url = https://github.com/NewYaroslav/siphash-hpp.git
+[submodule "lib/zstd"]
+	path = lib/zstd
+	url = https://github.com/facebook/zstd.git

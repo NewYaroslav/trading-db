@@ -30,7 +30,7 @@ namespace trading_db {
                 bid(new_bid),
                 high(new_ask),
                 timestamp_ms(new_timestamp_ms) {}
-				
+
             bool empty() const noexcept {
                 return (timestamp_ms == 0);
             }
@@ -267,7 +267,7 @@ namespace trading_db {
 					const size_t price_scale,
 					const uint64_t timestamp_day = 0) {
 				if (tiks.empty()) return;
-				
+
 				auto it_begin = ticks.begin();
 
 				double bid = it_begin->bid;
@@ -284,7 +284,7 @@ namespace trading_db {
 				double start_ask = 0;
 				uint64_t start_time_bid = 0;
 				uint64_t start_time_ask = 0;
-				
+
 				// обновляем значение максимальной разницы цены и времени
 				for (const auto &tick : ticks) {
 					if (!std::isnan(tick.bid) && tick.bid != 0) {
@@ -295,12 +295,12 @@ namespace trading_db {
 						}
 						max_diff_price = std::max(max_diff_price, std::abs(tick.bid - last_bid));
 						last_bid = tick.bid;
-						
+
 						max_diff_time = std::max(max_diff_time, std::abs((int64_t)tick.timestamp_ms - (int64_t)last_time_bid));
 						last_time_bid = tick.timestamp_ms;
 					}
 				}
-				
+
 				for (const auto &tick : ticks) {
 					if (!std::isnan(tick.ask) && tick.ask != 0) {
 						if (last_ask == 0) {
@@ -310,7 +310,7 @@ namespace trading_db {
 						}
 						max_diff_price = std::max(max_diff_price, std::abs(tick.ask - last_ask));
 						last_ask = tick.ask;
-						
+
 						max_diff_time = std::max(max_diff_time, std::abs((int64_t)tick.timestamp_ms - (int64_t)last_time_ask));
 						last_time_ask = tick.timestamp_ms;
 					}
@@ -329,7 +329,7 @@ namespace trading_db {
 				const uint8_t reg_b1 = calc_uint_type(std::max(start_time_bid, start_time_ask));
 				const uint8_t reg_b2 = calc_int_type(max_diff_amplitude_price);
 				const uint8_t reg_b3 = calc_int_type(max_diff_time);
-				
+
 				const uint8_t reg_b = (reg_b3 << 6) | (reg_b2 << 4) | (reg_b1 << 2) | (reg_b0 & 0x03);
 
 				// определяем длину массива
