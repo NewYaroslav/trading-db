@@ -48,6 +48,20 @@ namespace trading_db {
             }
         }
 
+        void parse_line_v2(std::string line, std::vector<std::string> &elemets) noexcept {
+            if (line.back() != '\t') line += "\t";
+            std::size_t start_pos = 0;
+            while (!false) {
+                std::size_t found_beg = line.find_first_of("\t", start_pos);
+                if (found_beg != std::string::npos) {
+                    std::size_t len = found_beg - start_pos;
+                    //if (len > 0)
+                    elemets.push_back(line.substr(start_pos, len));
+                    start_pos = found_beg + 1;
+                } else break;
+            }
+        }
+
         inline uint64_t change_timezone(const uint64_t t_ms) noexcept {
             return (uint64_t)((int64_t)t_ms + config.time_zone * (int64_t)ztime::MILLISECONDS_IN_SECOND);
         }
@@ -55,14 +69,30 @@ namespace trading_db {
         inline bool parse_mt5_ticks(std::ifstream &file) noexcept {
             // получаем заголовок файла
             std::string buffer;
-            std::getline(file, buffer);
+            if (!std::getline(file, buffer)) return false;
             Tick tick;
-            while(!file.eof()) {
-                std::getline(file, buffer);
+            while(std::getline(file, buffer)) {
                 std::vector<std::string> elemets;
-                parse_line(buffer, elemets);
+                parse_line_v2(buffer, elemets);
                 if (elemets.empty()) break;
-                const int flag = std::stoi(elemets.back());
+
+                /*
+                std::cout << "elemets.size() = " << elemets.size() << std::endl;
+                for (size_t i = 0; i < elemets.size(); ++i) {
+                    std::cout << "[" << i << "] = " << elemets[i] << std::endl;
+                }
+                */
+
+                int flag = 0;
+                if (elemets.size() == 7) {
+                    flag = std::stoi(elemets[6]);
+                } else
+                if (elemets.size() == 5) {
+                    if (elemets[2].empty()) flag = 4;
+                    else if (elemets[3].empty()) flag = 2;
+                    else flag = 6;
+                }
+
                 tick.timestamp_ms = change_timezone(ztime::to_timestamp_ms(elemets[0] + " " + elemets[1]));
 
                 switch (flag) {
@@ -72,7 +102,7 @@ namespace trading_db {
                     break;
                 case 4:
                     // читаем ask
-                    tick.ask = std::stod(elemets[2]);
+                    tick.ask = std::stod(elemets[3]);
                     break;
                 case 6:
                     // читаем bid и ask

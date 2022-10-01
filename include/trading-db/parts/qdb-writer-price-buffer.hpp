@@ -11,7 +11,7 @@
 
 namespace trading_db {
 
-     /** \brief Буфер для хранения данных цен тиков и баров
+    /** \brief Буфер для хранения данных цен тиков и баров
      */
     class QdbWriterPriceBuffer {
     public:
@@ -23,6 +23,7 @@ namespace trading_db {
         std::function<void(
             const std::map<uint64_t, ShortTick> &ticks,
             const uint64_t t)>  on_ticks    = nullptr;
+
         std::function<void(
             const std::array<Candle, ztime::MINUTES_IN_DAY> &candles,
             const uint64_t t)>  on_candles  = nullptr;

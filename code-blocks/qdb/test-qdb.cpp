@@ -22,7 +22,8 @@ int main() {
     trading_db::QdbCsv csv;
     csv.config.time_zone = - 3* ztime::SECONDS_IN_HOUR;
     csv.config.type = trading_db::QdbCsvType::MT5_CSV_TICKS_FILE;
-    csv.config.file_name = "dataset//AUDUSD-test.csv"; // Это файл тиков!
+    //csv.config.file_name = "dataset//AUDUSD-test.csv"; // Это файл тиков!
+    csv.config.file_name = "D:\\_repoz_trading\\mega-connector\\storage\\alpary-mt5\\GBPJPY.csv";
 
     // настраиваем данные БД
     qdb.set_info_int(trading_db::QDB::METADATA_TYPE::SYMBOL_DIGITS, 5);
@@ -32,12 +33,21 @@ int main() {
     size_t counter_csv_ticks = 0;
     uint64_t min_tick_time = 1000 * ztime::get_timestamp(1,1,2100,0,0,0), max_tick_time = 0;
 
+    uint64_t last_day_time = 0;
     // настраиваем обратные вызовы
     csv.on_tick = [&](const trading_db::Tick &tick) {
         qdb.write_tick(tick);
 
         min_tick_time = std::min(min_tick_time, tick.timestamp_ms);
         max_tick_time = std::max(max_tick_time, tick.timestamp_ms);
+
+        const uint64_t day_time = ztime::get_first_timestamp_day(tick.timestamp_ms/1000);
+        if (last_day_time != day_time) {
+            std::cout << ztime::get_str_date(day_time) << std::endl;
+            last_day_time = day_time;
+        }
+
+        ///std::cout << ztime::get_str_date_time_ms(tick.timestamp_ms/1000.0) << std::endl;
 
         ++counter_csv_ticks;
     };
@@ -57,6 +67,8 @@ int main() {
         << " -> "
         << ztime::get_str_date_time_ms((double)max_tick_time/1000.0)
         << std::endl;
+
+    std::system("pause");
 
     // читаем данные из БД
     /*
