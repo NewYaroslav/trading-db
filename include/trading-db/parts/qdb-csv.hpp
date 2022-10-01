@@ -62,8 +62,12 @@ namespace trading_db {
             }
         }
 
-        inline uint64_t change_timezone(const uint64_t t_ms) noexcept {
+        inline uint64_t change_timezone_ms(const uint64_t t_ms) noexcept {
             return (uint64_t)((int64_t)t_ms + config.time_zone * (int64_t)ztime::MILLISECONDS_IN_SECOND);
+        }
+
+        inline uint64_t change_timezone(const uint64_t t) noexcept {
+            return (uint64_t)((int64_t)t + config.time_zone);
         }
 
         inline bool parse_mt5_ticks(std::ifstream &file) noexcept {
@@ -93,7 +97,7 @@ namespace trading_db {
                     else flag = 6;
                 }
 
-                tick.timestamp_ms = change_timezone(ztime::to_timestamp_ms(elemets[0] + " " + elemets[1]));
+                tick.timestamp_ms = change_timezone_ms(ztime::to_timestamp_ms(elemets[0] + " " + elemets[1]));
 
                 switch (flag) {
                 case 2:
@@ -120,12 +124,12 @@ namespace trading_db {
             std::string buffer;
             std::getline(file, buffer);
             Candle candle;
-            while(!file.eof()) {
-                std::getline(file, buffer);
+            while(std::getline(file, buffer)) {
                 std::vector<std::string> elemets;
                 parse_line(buffer, elemets);
+
                 if (elemets.empty()) break;
-                //const int flag = std::stoi(elemets.back());
+
                 candle.timestamp = change_timezone(ztime::to_timestamp(elemets[0] + " " + elemets[1]));
 
                 candle.open = std::stod(elemets[2]);

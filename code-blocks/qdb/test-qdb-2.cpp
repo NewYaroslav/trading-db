@@ -21,7 +21,8 @@ int main() {
     trading_db::QdbCsv csv;
     csv.config.time_zone = - 3* ztime::SECONDS_IN_HOUR;
     csv.config.type = trading_db::QdbCsvType::MT5_CSV_CANDLES_FILE;
-    csv.config.file_name = "dataset//AUDUSD-test-2.csv"; // Это файл тиков!
+    //csv.config.file_name = "dataset//AUDUSD-test-2.csv"; // Это файл тиков!
+    csv.config.file_name = "D:\\_repoz_trading\\mega-connector\\storage\\alpary-mt5-csv\\AUDCAD_M1.csv";
 
     // настраиваем данные БД
     qdb.set_info_int(trading_db::QDB::METADATA_TYPE::SYMBOL_DIGITS, 5);
@@ -29,6 +30,8 @@ int main() {
 
     // данные по барам
     uint64_t min_candle_time = 1000 * ztime::get_timestamp(1,1,2100,0,0,0), max_candle_time = 0;
+
+    uint64_t last_day_time = 0;
 
     // настраиваем обратные вызовы
     csv.on_tick = [&](const trading_db::Tick &tick) {
@@ -41,6 +44,13 @@ int main() {
             min_candle_time = std::min(min_candle_time, candle.timestamp);
             max_candle_time = std::max(max_candle_time, candle.timestamp);
         }
+
+        const uint64_t day_time = ztime::get_first_timestamp_day(candle.timestamp);
+        if (last_day_time != day_time) {
+            std::cout << ztime::get_str_date(day_time) << std::endl;
+            last_day_time = day_time;
+        }
+        //std::cout << ztime::get_str_date_time_ms(candle.timestamp) << std::endl;
     };
 
     // начинаем запись данных в БД
@@ -55,6 +65,7 @@ int main() {
         << ztime::get_str_date_time(max_candle_time)
         << std::endl;
 
+    std::system("pause");
 
     // проводим тестирование БД
 
