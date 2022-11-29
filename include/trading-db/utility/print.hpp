@@ -6,6 +6,10 @@
 #include <mutex>
 #include <sstream>
 
+#ifndef TRADING_DB_PRINT
+#define TRADING_DB_PRINT trading_db::utility::PrintThread{}
+#endif
+
 namespace trading_db {
 	namespace utility {
 

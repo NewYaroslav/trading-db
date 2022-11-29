@@ -14,6 +14,7 @@
 #include "parts/qdb-writer-price-buffer.hpp"
 #include "parts/qdb-storage.hpp"
 #include "parts/qdb-csv.hpp"
+//#include "parts/qdb-history.hpp"
 
 #include "utility/sqlite-func.hpp"
 #include "utility/async-tasks.hpp"

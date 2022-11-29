@@ -2,6 +2,9 @@
 #ifndef TRADING_DB_QDB_COMMON_HPP_INCLUDED
 #define TRADING_DB_QDB_COMMON_HPP_INCLUDED
 
+#include <limits>
+#include "ztime.hpp"
+
 namespace trading_db {
 
     /// Режимы использования цены
@@ -175,6 +178,59 @@ namespace trading_db {
             return (bid == 0);
         }
     }; // ShortTick
+
+    /** \brief Класс точки времени
+     */
+    class TimePoint {
+    public:
+        uint32_t second_day = 0;
+
+        inline void set(
+                const int hh,
+                const int mm,
+                const int ss = 0) noexcept {
+            second_day = ztime::get_second_day(hh, mm, ss);
+        }
+
+        TimePoint() {};
+        TimePoint(const int hh, const int mm, const int ss = 0) { set(hh, mm, ss); };
+    }; // TimePoint
+
+    static const int32_t QDB_TIME_PERIOD_NO_ID = std::numeric_limits<int32_t>::min();   /**< Значение для пустого ID периода */
+
+    /** \brief Класс периода времени
+     * \warning Период включает в себя время, указанное в stop
+     */
+    class TimePeriod {
+    public:
+        TimePoint   start;
+        TimePoint   stop;
+        int32_t     id      = QDB_TIME_PERIOD_NO_ID;
+
+        inline const bool check_time(const uint64_t t) const noexcept {
+            const uint32_t second_day = ztime::get_second_day(t);
+            return (second_day >= start.second_day && second_day <= stop.second_day);
+        }
+
+        inline void set(
+                const TimePoint &user_start,
+                const TimePoint &user_stop,
+                const int32_t user_id = QDB_TIME_PERIOD_NO_ID) noexcept {
+            start = user_start;
+            stop = user_stop;
+            id = user_id;
+        }
+
+        TimePeriod() {};
+
+        TimePeriod(
+                const TimePoint &user_start,
+                const TimePoint &user_stop,
+                const int32_t user_id = QDB_TIME_PERIOD_NO_ID) {
+                set(user_start, user_stop, user_id);
+        };
+    }; // TimePeriod
+
 };
 
 #endif // TRADING_DB_QDB_COMMON_HPP_INCLUDED

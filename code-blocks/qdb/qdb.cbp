@@ -348,6 +348,38 @@
 					<Add directory="../../lib" />
 				</Linker>
 			</Target>
+			<Target title="qdb-simulator">
+				<Option output="qdb-simulator" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Linker>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -383,6 +415,7 @@
 			<Option target="storage" />
 			<Option target="test-qdb" />
 			<Option target="test-qdb-2" />
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-compact-ticks-dataset.hpp">
 			<Option target="compact-dataset" />
@@ -395,6 +428,7 @@
 			<Option target="storage" />
 			<Option target="test-qdb" />
 			<Option target="test-qdb-2" />
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-csv.hpp">
 			<Option target="compact-dataset" />
@@ -407,6 +441,7 @@
 			<Option target="storage" />
 			<Option target="test-qdb" />
 			<Option target="test-qdb-2" />
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-data-preparation.hpp">
 			<Option target="dictionary-ticks-train-zstd-2" />
@@ -415,10 +450,14 @@
 			<Option target="storage" />
 			<Option target="test-qdb" />
 			<Option target="test-qdb-2" />
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-dictionary-candles.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb-dictionary-ticks.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb-price-buffer.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb-simulator.hpp">
+			<Option target="qdb-simulator" />
+		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-storage.hpp">
 			<Option target="price-buffer" />
 		</Unit>
@@ -432,6 +471,7 @@
 			<Option target="storage" />
 			<Option target="test-qdb" />
 			<Option target="test-qdb-2" />
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-zstd.hpp">
 			<Option target="csv-data-preparation" />
@@ -443,6 +483,7 @@
 			<Option target="storage" />
 			<Option target="test-qdb" />
 			<Option target="test-qdb-2" />
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
 		<Unit filename="../../include/trading-db/qdb.hpp" />
@@ -492,6 +533,9 @@
 		</Unit>
 		<Unit filename="dictionary-ticks-train-zstd.cpp">
 			<Option target="dictionary-ticks-train-zstd" />
+		</Unit>
+		<Unit filename="qdb-simulator.cpp">
+			<Option target="qdb-simulator" />
 		</Unit>
 		<Unit filename="storage.cpp">
 			<Option target="storage" />
