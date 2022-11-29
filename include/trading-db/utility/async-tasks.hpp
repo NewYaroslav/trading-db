@@ -15,10 +15,10 @@ namespace trading_db {
 		 */
 		class AsyncTasks {
 		private:
-			std::mutex                      futures_mutex;
-			std::deque<std::future<void>>   futures;
-			std::atomic<bool>               is_shutdown = ATOMIC_VAR_INIT(false);
-			std::atomic<int>                counter = ATOMIC_VAR_INIT(0);
+			std::mutex						futures_mutex;
+			std::deque<std::future<void>>	futures;
+			std::atomic<bool>				is_shutdown = ATOMIC_VAR_INIT(false);
+			std::atomic<int>				counter = ATOMIC_VAR_INIT(0);
 
 		public:
 
@@ -83,37 +83,37 @@ namespace trading_db {
 				}
 				*/
 				size_t index = 0;
-                while (!false) {
-                    std::unique_lock<std::mutex> locker(futures_mutex);
-                    if (index < futures.size()) {
-                        try {
-                            std::shared_future<void> share = futures[index].share();
-                            if (share.valid()) {
-                                if (share.wait_for(std::chrono::milliseconds(1)) ==
-                                    std::future_status::timeout) {
-                                    locker.unlock();
-                                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                                    continue;
-                                }
-                                share.get();
-                                futures.erase(futures.begin() + index);
-                                continue;
-                            }
-                        }
-                        catch(const std::exception &e) {}
-                        catch(...) {}
-                        ++index;
-                    } else break;
-                }
+				while (!false) {
+					std::unique_lock<std::mutex> locker(futures_mutex);
+					if (index < futures.size()) {
+						try {
+							std::shared_future<void> share = futures[index].share();
+							if (share.valid()) {
+								if (share.wait_for(std::chrono::milliseconds(1)) ==
+									std::future_status::timeout) {
+									locker.unlock();
+									std::this_thread::sleep_for(std::chrono::milliseconds(1));
+									continue;
+								}
+								share.get();
+								futures.erase(futures.begin() + index);
+								continue;
+							}
+						}
+						catch(const std::exception &e) {}
+						catch(...) {}
+						++index;
+					} else break;
+				}
 			}
 
 			/** \brief Проверить занятость задачами
-             * \return Вернет true, если есть хотя бы одна не выполненная задача
-             */
-            inline bool busy() noexcept {
-                if (counter == 0) return false;
-                return true;
-            } // busy
+			 * \return Вернет true, если есть хотя бы одна не выполненная задача
+			 */
+			inline bool busy() noexcept {
+				if (counter == 0) return false;
+				return true;
+			} // busy
 
 			AsyncTasks() {};
 
@@ -131,15 +131,15 @@ namespace trading_db {
 				}
 				*/
 				std::lock_guard<std::mutex> locker(futures_mutex);
-                for(size_t i = 0; i < futures.size(); ++i) {
-                    std::shared_future<void> share = futures[i].share();
-                    if(share.valid()) {
-                        try {
-                            share.wait();
-                            share.get();
-                        } catch(...) {}
-                    }
-                }
+				for(size_t i = 0; i < futures.size(); ++i) {
+					std::shared_future<void> share = futures[i].share();
+					if(share.valid()) {
+						try {
+							share.wait();
+							share.get();
+						} catch(...) {}
+					}
+				}
 			} // ~AsyncTasks()
 
 		}; // AsyncTasks

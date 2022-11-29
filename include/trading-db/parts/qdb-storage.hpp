@@ -22,15 +22,15 @@
 
 namespace trading_db {
 
-    class QdbStorage {
-    public:
+	class QdbStorage {
+	public:
 
-        /** \brief Структура Ключ-Значение
+		/** \brief Структура Ключ-Значение
 		 */
 		class KeyValue {
 		public:
-			uint64_t                key;
-			std::vector<uint8_t>    value;
+			uint64_t				key;
+			std::vector<uint8_t>	value;
 		};
 
 		/** \brief Класс для хранения мета данных
@@ -46,28 +46,28 @@ namespace trading_db {
 		};
 
 		enum class METADATA_TYPE {
-            SYMBOL_NAME,
-            SYMBOL_DIGITS,
-            SYMBOL_DATA_FEED_SOURCE,
+			SYMBOL_NAME,
+			SYMBOL_DIGITS,
+			SYMBOL_DATA_FEED_SOURCE,
 		};
 
 		/** \brief Класс конфигурации базы данных
 		 */
 		class Config {
 		public:
-			const std::string title = "trading_db::QdbStorage ";    /**< Название заголовка для логов */
-			const std::string candle_table      = "candles";        /**< Имя таблицы */
-			const std::string tick_table        = "ticks";          /**< Имя таблицы */
-			const std::string meta_data_table   = "meta-data";      /**< Имя таблицы */
+			const std::string title = "trading_db::QdbStorage ";	/**< Название заголовка для логов */
+			const std::string candle_table		= "candles";		/**< Имя таблицы */
+			const std::string tick_table		= "ticks";			/**< Имя таблицы */
+			const std::string meta_data_table	= "meta-data";		/**< Имя таблицы */
 			int busy_timeout = 0;
 			std::atomic<bool> use_log = ATOMIC_VAR_INIT(false);
 		};
 
 		Config config;	/**< Конфигурация базы данных */
 
-    private:
+	private:
 
-        std::string database_name;
+		std::string database_name;
 		sqlite3 *sqlite_db = nullptr;
 		// команды для транзакций
 		utility::SqliteTransaction sqlite_transaction;
@@ -85,7 +85,7 @@ namespace trading_db {
 		std::mutex backup_mutex;
 		// флаг сброса
 		std::atomic<bool> is_shutdown = ATOMIC_VAR_INIT(false);
-        //
+		//
 		std::mutex method_mutex;
 
 		inline void print_error(
@@ -119,18 +119,18 @@ namespace trading_db {
 					"CREATE TABLE IF NOT EXISTS '" + config.candle_table + "' ("
 					"key				INTEGER PRIMARY KEY NOT NULL,"
 					"value				BLOB				NOT NULL)";
-                const std::string create_tick_table_sql =
+				const std::string create_tick_table_sql =
 					"CREATE TABLE IF NOT EXISTS '" + config.tick_table + "' ("
 					"key				INTEGER PRIMARY KEY NOT NULL,"
 					"value				BLOB				NOT NULL)";
-                const std::string create_meta_data_table_sql =
+				const std::string create_meta_data_table_sql =
 					"CREATE TABLE IF NOT EXISTS '" + config.meta_data_table + "' ("
 					"key				TEXT	PRIMARY KEY NOT NULL,"
 					"value				TEXT				NOT NULL)";
 
-                if (!utility::prepare(sqlite_db_ptr, create_candle_table_sql)) return false;
-                if (!utility::prepare(sqlite_db_ptr, create_tick_table_sql)) return false;
-                if (!utility::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
+				if (!utility::prepare(sqlite_db_ptr, create_candle_table_sql)) return false;
+				if (!utility::prepare(sqlite_db_ptr, create_tick_table_sql)) return false;
+				if (!utility::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
 			}
 			return true;
 		}
@@ -160,10 +160,10 @@ namespace trading_db {
 		}
 
 		bool replace_price_data(
-                const uint64_t key,
-                const std::vector<uint8_t> &buffer,
-                utility::SqliteTransaction &transaction,
-                utility::SqliteStmt &stmt) noexcept {
+				const uint64_t key,
+				const std::vector<uint8_t> &buffer,
+				utility::SqliteTransaction &transaction,
+				utility::SqliteStmt &stmt) noexcept {
 
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -234,9 +234,9 @@ namespace trading_db {
 		}
 
 		bool replace_price_data_map(
-				const std::map<uint64_t, std::vector<uint8_t>>  &buffer,
-				utility::SqliteTransaction                      &transaction,
-				utility::SqliteStmt                             &stmt) noexcept {
+				const std::map<uint64_t, std::vector<uint8_t>>	&buffer,
+				utility::SqliteTransaction						&transaction,
+				utility::SqliteStmt								&stmt) noexcept {
 			if (buffer.empty()) return true;
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -395,17 +395,17 @@ namespace trading_db {
 			return (sqlite_db != nullptr);
 		}
 
-    public:
+	public:
 
-        QdbStorage() {};
+		QdbStorage() {};
 
-        ~QdbStorage() {
-            is_shutdown = true;
+		~QdbStorage() {
+			is_shutdown = true;
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (sqlite_db != nullptr) sqlite3_close_v2(sqlite_db);
-        };
+		};
 
-        /** \brief Открыть БД
+		/** \brief Открыть БД
 		 * \param path		Путь к файлу БД
 		 * \param readonly	Флаг 'только чтение'
 		 * \return Вернет true в случае успешной инициализации
@@ -416,20 +416,20 @@ namespace trading_db {
 			return init_db(path, readonly);
 		}
 
-        inline bool read_candles(std::vector<uint8_t> &data, const uint64_t t) noexcept {
-            data = get_price_data(stmt_get_candle, t);
-            if (data.empty()) return false;
-            return true;
-        }
+		inline bool read_candles(std::vector<uint8_t> &data, const uint64_t t) noexcept {
+			data = get_price_data(stmt_get_candle, t);
+			if (data.empty()) return false;
+			return true;
+		}
 
-        inline bool read_ticks(std::vector<uint8_t> &data, const uint64_t t) noexcept {
-            data = get_price_data(stmt_get_tick, t);
-            if (data.empty()) return false;
-            return true;
-        }
+		inline bool read_ticks(std::vector<uint8_t> &data, const uint64_t t) noexcept {
+			data = get_price_data(stmt_get_tick, t);
+			if (data.empty()) return false;
+			return true;
+		}
 
-        inline bool write_candles(const std::map<uint64_t, std::vector<uint8_t>> &data) noexcept {
-            {
+		inline bool write_candles(const std::map<uint64_t, std::vector<uint8_t>> &data) noexcept {
+			{
 				std::lock_guard<std::mutex> lock(method_mutex);
 				if (!check_init_db()) return false;
 			}
@@ -441,10 +441,10 @@ namespace trading_db {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
 			return false;
-        }
+		}
 
-        inline bool write_ticks(const std::map<uint64_t, std::vector<uint8_t>> &data) noexcept {
-            {
+		inline bool write_ticks(const std::map<uint64_t, std::vector<uint8_t>> &data) noexcept {
+			{
 				std::lock_guard<std::mutex> lock(method_mutex);
 				if (!check_init_db()) return false;
 			}
@@ -456,10 +456,10 @@ namespace trading_db {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
 			return false;
-        }
+		}
 
-        inline bool write_candles(const std::vector<uint8_t> &data, const uint64_t t) noexcept {
-            {
+		inline bool write_candles(const std::vector<uint8_t> &data, const uint64_t t) noexcept {
+			{
 				std::lock_guard<std::mutex> lock(method_mutex);
 				if (!check_init_db()) return false;
 			}
@@ -471,10 +471,10 @@ namespace trading_db {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
 			return false;
-        }
+		}
 
-        inline bool write_ticks(const std::vector<uint8_t> &data, const uint64_t t) noexcept {
-            {
+		inline bool write_ticks(const std::vector<uint8_t> &data, const uint64_t t) noexcept {
+			{
 				std::lock_guard<std::mutex> lock(method_mutex);
 				if (!check_init_db()) return false;
 			}
@@ -486,90 +486,90 @@ namespace trading_db {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			}
 			return false;
-        }
+		}
 
-        inline bool remove_candles(const uint64_t t) noexcept {
-            std::lock_guard<std::mutex> lock(method_mutex);
+		inline bool remove_candles(const uint64_t t) noexcept {
+			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			return utility::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "' WHERE key == " + std::to_string(t));
-        }
+		}
 
-        inline bool remove_ticks(const uint64_t t) noexcept {
-            std::lock_guard<std::mutex> lock(method_mutex);
+		inline bool remove_ticks(const uint64_t t) noexcept {
+			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			return utility::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "' WHERE key == " + std::to_string(t));
-        }
+		}
 
-        /** \brief Удалить все данные
+		/** \brief Удалить все данные
 		 */
 		inline bool remove_all() noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			return
-                utility::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "'") &&
-                utility::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "'") &&
-                utility::prepare(sqlite_db, "DELETE FROM '" + config.meta_data_table + "'");
+				utility::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "'") &&
+				utility::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "'") &&
+				utility::prepare(sqlite_db, "DELETE FROM '" + config.meta_data_table + "'");
 		}
 
 		inline std::string get_info_str(const METADATA_TYPE type) noexcept {
-            MetaData pair;
-            switch (type) {
-            case METADATA_TYPE::SYMBOL_NAME:
-                pair = get_meta_data(stmt_get_meta_data, "SYMBOL_NAME");
-                break;
-            case METADATA_TYPE::SYMBOL_DATA_FEED_SOURCE:
-                pair = get_meta_data(stmt_get_meta_data, "SYMBOL_DATA_FEED_SOURCE");
-                break;
-            case METADATA_TYPE::SYMBOL_DIGITS:
-            default:
-                break;
-            };
-            return pair.value;
+			MetaData pair;
+			switch (type) {
+			case METADATA_TYPE::SYMBOL_NAME:
+				pair = get_meta_data(stmt_get_meta_data, "SYMBOL_NAME");
+				break;
+			case METADATA_TYPE::SYMBOL_DATA_FEED_SOURCE:
+				pair = get_meta_data(stmt_get_meta_data, "SYMBOL_DATA_FEED_SOURCE");
+				break;
+			case METADATA_TYPE::SYMBOL_DIGITS:
+			default:
+				break;
+			};
+			return pair.value;
 		}
 
 		inline int get_info_int(const METADATA_TYPE type) noexcept {
-            MetaData pair;
-            switch (type) {
-            case METADATA_TYPE::SYMBOL_DIGITS:
-                pair = get_meta_data(stmt_get_meta_data, "SYMBOL_DIGITS");
-                break;
-            default:
-                return 0;
-            };
-            if (pair.value.empty()) return 0;
-            return std::stoi(pair.value);
+			MetaData pair;
+			switch (type) {
+			case METADATA_TYPE::SYMBOL_DIGITS:
+				pair = get_meta_data(stmt_get_meta_data, "SYMBOL_DIGITS");
+				break;
+			default:
+				return 0;
+			};
+			if (pair.value.empty()) return 0;
+			return std::stoi(pair.value);
 		}
 
 		inline bool set_info_str(const METADATA_TYPE type, const std::string &value) {
-            MetaData pair;
-            pair.value = value;
-            switch (type) {
-            case METADATA_TYPE::SYMBOL_NAME:
-                pair.key = "SYMBOL_NAME";
-                break;
-            case METADATA_TYPE::SYMBOL_DATA_FEED_SOURCE:
-                pair.key = "SYMBOL_DATA_FEED_SOURCE";
-                break;
-            default:
-                return false;
-            };
-            return replace_meta_data(pair, sqlite_transaction, stmt_replace_meta_data);
+			MetaData pair;
+			pair.value = value;
+			switch (type) {
+			case METADATA_TYPE::SYMBOL_NAME:
+				pair.key = "SYMBOL_NAME";
+				break;
+			case METADATA_TYPE::SYMBOL_DATA_FEED_SOURCE:
+				pair.key = "SYMBOL_DATA_FEED_SOURCE";
+				break;
+			default:
+				return false;
+			};
+			return replace_meta_data(pair, sqlite_transaction, stmt_replace_meta_data);
 		}
 
 		inline bool set_info_int(const METADATA_TYPE type, const int value) {
-            MetaData pair;
-            pair.value = std::to_string(value);
-            switch (type) {
-            case METADATA_TYPE::SYMBOL_DIGITS:
-                pair.key = "SYMBOL_DIGITS";
-                break;
-            default:
-                return false;
-            };
-            return replace_meta_data(pair, sqlite_transaction, stmt_replace_meta_data);
+			MetaData pair;
+			pair.value = std::to_string(value);
+			switch (type) {
+			case METADATA_TYPE::SYMBOL_DIGITS:
+				pair.key = "SYMBOL_DIGITS";
+				break;
+			default:
+				return false;
+			};
+			return replace_meta_data(pair, sqlite_transaction, stmt_replace_meta_data);
 		}
 
-    }; // QdbStorage
+	}; // QdbStorage
 }; // trading_db
 
 #endif // TRADING_DB_QDB_STORAGE_HPP_INCLUDED

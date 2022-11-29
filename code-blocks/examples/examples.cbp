@@ -89,33 +89,6 @@
 					<Add directory="../../include" />
 				</Linker>
 			</Target>
-			<Target title="example-qdb-compact-dataset">
-				<Option output="example-qdb-compact-dataset" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/Release/" />
-				<Option type="1" />
-				<Option compiler="mingw_64_7_3_0" />
-				<Compiler>
-					<Add option="-std=c++14" />
-					<Add option="-pg" />
-					<Add option="-Og" />
-					<Add option="-g" />
-					<Add option="-DSQLITE_THREADSAFE=1" />
-					<Add directory="../../lib/sqlite_orm/include" />
-					<Add directory="../../lib/sqlite-amalgamation-3340100" />
-					<Add directory="../../lib/ztime-cpp/src" />
-					<Add directory="../../include" />
-				</Compiler>
-				<Linker>
-					<Add option="-pg -lgmon" />
-					<Add option="-static-libstdc++" />
-					<Add option="-static-libgcc" />
-					<Add option="-static" />
-					<Add directory="../../lib/sqlite_orm/include" />
-					<Add directory="../../lib/sqlite-amalgamation-3340100" />
-					<Add directory="../../lib/ztime-cpp/src" />
-					<Add directory="../../include" />
-				</Linker>
-			</Target>
 			<Target title="example-bet-db">
 				<Option output="example-bet-db" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
@@ -256,29 +229,23 @@
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/files.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb-common.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-price-buffer" />
 			<Option target="example-qdb-csv" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-compact-candles-dataset.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-price-buffer" />
 			<Option target="example-qdb-csv" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-compact-dataset.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-csv" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-compact-ticks-dataset.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-csv" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-csv.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-csv" />
 		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb-price-buffer.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-price-buffer" />
 			<Option target="example-qdb-csv" />
 		</Unit>
@@ -293,7 +260,6 @@
 		</Unit>
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
 		<Unit filename="../../include/trading-db/qdb.hpp">
-			<Option target="example-qdb-compact-dataset" />
 			<Option target="example-qdb-price-buffer" />
 			<Option target="example-qdb-csv" />
 		</Unit>
@@ -333,9 +299,6 @@
 		</Unit>
 		<Unit filename="example-list-db.cpp">
 			<Option target="example-list-db" />
-		</Unit>
-		<Unit filename="example-qdb-compact-dataset.cpp">
-			<Option target="example-qdb-compact-dataset" />
 		</Unit>
 		<Unit filename="example-qdb-csv.cpp">
 			<Option target="example-qdb-csv" />

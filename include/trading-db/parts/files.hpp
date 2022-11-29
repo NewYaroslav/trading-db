@@ -30,52 +30,52 @@ namespace trading_db {
 		}
 
 		/** \brief Загрузить файл целиком в std::string
-         * \param file_name имя файла
-         * \param buffer данные файла
-         * \param buffer_size размер буфера
-         * \param start_buffer_pos начало записи в буфер
-         * \return размер файла, вернет -1 если файл не удалось открыть
-         */
-        int load_file(std::string file_name, void *buffer, size_t buffer_size, size_t start_buffer_pos = 0) {
-                std::ifstream file(file_name, std::ios_base::binary);
-                if (!file) return -1;
-                file.seekg(0, std::ios_base::end);
-                std::ifstream::pos_type file_size = file.tellg();
-                file.seekg(0);
-                if ((size_t)file_size > (buffer_size - start_buffer_pos)) return -1;
-                file.read((char*)buffer + start_buffer_pos, file_size);
-                return file_size;
-        }
+		 * \param file_name имя файла
+		 * \param buffer данные файла
+		 * \param buffer_size размер буфера
+		 * \param start_buffer_pos начало записи в буфер
+		 * \return размер файла, вернет -1 если файл не удалось открыть
+		 */
+		int load_file(std::string file_name, void *buffer, size_t buffer_size, size_t start_buffer_pos = 0) {
+				std::ifstream file(file_name, std::ios_base::binary);
+				if (!file) return -1;
+				file.seekg(0, std::ios_base::end);
+				std::ifstream::pos_type file_size = file.tellg();
+				file.seekg(0);
+				if ((size_t)file_size > (buffer_size - start_buffer_pos)) return -1;
+				file.read((char*)buffer + start_buffer_pos, file_size);
+				return file_size;
+		}
 
-        /** \brief Записать файл целиком из буфера
-         * \param file_name имя файла
-         * \param buffer буфер
-         * \param buffer_size размер буфера
-         * \return размер файла, вернет -1 если файл не удалось записать
-         */
-        int write_file(std::string file_name, void *buffer, size_t buffer_size) {
-            std::ofstream file(file_name, std::ios_base::binary);
-            if (!file) return -1;
-            file.write((char*)buffer, buffer_size);
-            file.close();
-            return buffer_size;
-        }
+		/** \brief Записать файл целиком из буфера
+		 * \param file_name имя файла
+		 * \param buffer буфер
+		 * \param buffer_size размер буфера
+		 * \return размер файла, вернет -1 если файл не удалось записать
+		 */
+		int write_file(std::string file_name, void *buffer, size_t buffer_size) {
+			std::ofstream file(file_name, std::ios_base::binary);
+			if (!file) return -1;
+			file.write((char*)buffer, buffer_size);
+			file.close();
+			return buffer_size;
+		}
 
 		/** \brief Получить размер файла
-         * \param file_name имя файла
-         * \return размер файла, вернет -1 если файл не удалось открыть
-         */
-        int get_file_size(std::string file_name) {
-            std::ifstream file;
-            file.open(file_name);
-            if (!file) return -1;
-            file.seekg(0, std::ios::end);
-            int file_size = file.tellg();
-            file.close();
-            return file_size;
-        }
+		 * \param file_name имя файла
+		 * \return размер файла, вернет -1 если файл не удалось открыть
+		 */
+		int get_file_size(std::string file_name) {
+			std::ifstream file;
+			file.open(file_name);
+			if (!file) return -1;
+			file.seekg(0, std::ios::end);
+			int file_size = file.tellg();
+			file.close();
+			return file_size;
+		}
 
-        /** \brief Разобрать путь на составляющие
+		/** \brief Разобрать путь на составляющие
 		 * Данная функция парсит путь, например C:/Users\\user/Downloads разложит на
 		 * C:, Users, user и Downloads
 		 * \param path путь, который надо распарсить
@@ -102,28 +102,28 @@ namespace trading_db {
 			}
 		}
 
-        /** \brief Установить или изменить расширение файла
-         * \param path Путь к файлу
-         * \param file_extension новое расширение файла
-         * \param separator Символ разделителя
-         * \return Вернет имя файла с указанным расширением
-         */
-        std::string set_file_extension(const std::string path, const std::string file_extension, const std::string separator = "/") {
-            if (!path.size()) return (path + file_extension);
-            std::vector<std::string> elemet_list;
-            parse_path(path, elemet_list);
-            std::string file_name = elemet_list.back();
-            std::size_t found_point = file_name.find_last_of(".");
-            if (found_point == std::string::npos) return (path + file_extension);
-            std::string _file_extension = file_name.substr(found_point);
-            std::string _file_name = file_name.substr(0, found_point);
-            std::string new_path;
-            for(size_t i = 0; i < elemet_list.size() - 1; ++i) {
-                new_path += elemet_list[i] + separator;
-            }
-            new_path += _file_name + file_extension;
-            return new_path;
-        }
+		/** \brief Установить или изменить расширение файла
+		 * \param path Путь к файлу
+		 * \param file_extension новое расширение файла
+		 * \param separator Символ разделителя
+		 * \return Вернет имя файла с указанным расширением
+		 */
+		std::string set_file_extension(const std::string path, const std::string file_extension, const std::string separator = "/") {
+			if (!path.size()) return (path + file_extension);
+			std::vector<std::string> elemet_list;
+			parse_path(path, elemet_list);
+			std::string file_name = elemet_list.back();
+			std::size_t found_point = file_name.find_last_of(".");
+			if (found_point == std::string::npos) return (path + file_extension);
+			std::string _file_extension = file_name.substr(found_point);
+			std::string _file_name = file_name.substr(0, found_point);
+			std::string new_path;
+			for(size_t i = 0; i < elemet_list.size() - 1; ++i) {
+				new_path += elemet_list[i] + separator;
+			}
+			new_path += _file_name + file_extension;
+			return new_path;
+		}
 
 		/** \brief Создать директорию
 		 * \param path директория, которую необходимо создать
@@ -149,57 +149,57 @@ namespace trading_db {
 		}
 
 		/** \brief Получить список файлов
-         * \param path путь, с которого начинается поиск
-         * \param output_list список файлов
-         * \param is_with_directory данный параметр влияет сразу на два фактора.
-         * Если параметр false, список формируется только из имен файлов, которые есть в path
-         * Поиск файлов во вложенных папках при этом не производится
-         * Если параметр указан как true, тогда имя файла формируется с учетом path, а также
-         * функция делает поиск во всех вложенных папках
-         * \param is_folders_only Данная функция будет помещать в спсиок только папки
-         * \return количество найденых файлов
-         */
+		 * \param path путь, с которого начинается поиск
+		 * \param output_list список файлов
+		 * \param is_with_directory данный параметр влияет сразу на два фактора.
+		 * Если параметр false, список формируется только из имен файлов, которые есть в path
+		 * Поиск файлов во вложенных папках при этом не производится
+		 * Если параметр указан как true, тогда имя файла формируется с учетом path, а также
+		 * функция делает поиск во всех вложенных папках
+		 * \param is_folders_only Данная функция будет помещать в спсиок только папки
+		 * \return количество найденых файлов
+		 */
 
-        unsigned long get_list_files(
-                std::string path,
-                std::vector<std::string> &output_list,
-                const bool is_with_directory = true,
-                const bool is_folders_only = false) {
-            DIR* directory;                                    // Directory object
-            dirent* directory_name;
-            unsigned long num_files = 0;
+		unsigned long get_list_files(
+				std::string path,
+				std::vector<std::string> &output_list,
+				const bool is_with_directory = true,
+				const bool is_folders_only = false) {
+			DIR* directory;									   // Directory object
+			dirent* directory_name;
+			unsigned long num_files = 0;
 
-            if (path.back() != '/' && path.back() != '\\') path += "/";
-            if ((directory = opendir(path.c_str()))) {
-                // открываем директорию
-                while ((directory_name = readdir(directory))) {
-                    //unsigned long str_len = strlen(directory_name->d_name);
-                    char * search_char = (char*) memchr(directory_name->d_name, '.', strlen(directory_name->d_name));
-                    std::string str_directory_name = std::string(directory_name->d_name);
-                    if (search_char == NULL) {
-                        if (is_folders_only && is_with_directory) {
-                            output_list.push_back(path + str_directory_name);
-                        } else
-                        if (is_folders_only && !is_with_directory) {
-                            output_list.push_back(str_directory_name);
-                        }
-                        if (is_with_directory) {
-                            num_files += get_list_files(path + str_directory_name, output_list, is_with_directory, is_folders_only);
-                        }
-                        continue;
-                    }
-                    if (str_directory_name == "." ||
-                        str_directory_name == ".." ||
-                        is_folders_only) continue;
-                    std::string file_name;
-                    if (is_with_directory) output_list.push_back(path + str_directory_name);
-                    else output_list.push_back(str_directory_name);
-                    num_files++;
-                }
-            }
-            closedir(directory);
-            return num_files;
-        }
+			if (path.back() != '/' && path.back() != '\\') path += "/";
+			if ((directory = opendir(path.c_str()))) {
+				// открываем директорию
+				while ((directory_name = readdir(directory))) {
+					//unsigned long str_len = strlen(directory_name->d_name);
+					char * search_char = (char*) memchr(directory_name->d_name, '.', strlen(directory_name->d_name));
+					std::string str_directory_name = std::string(directory_name->d_name);
+					if (search_char == NULL) {
+						if (is_folders_only && is_with_directory) {
+							output_list.push_back(path + str_directory_name);
+						} else
+						if (is_folders_only && !is_with_directory) {
+							output_list.push_back(str_directory_name);
+						}
+						if (is_with_directory) {
+							num_files += get_list_files(path + str_directory_name, output_list, is_with_directory, is_folders_only);
+						}
+						continue;
+					}
+					if (str_directory_name == "." ||
+						str_directory_name == ".." ||
+						is_folders_only) continue;
+					std::string file_name;
+					if (is_with_directory) output_list.push_back(path + str_directory_name);
+					else output_list.push_back(str_directory_name);
+					num_files++;
+				}
+			}
+			closedir(directory);
+			return num_files;
+		}
 	}; // utility
 }; // mega_connector
 
