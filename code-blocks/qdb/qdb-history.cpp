@@ -9,13 +9,13 @@ int main(int argc, char* argv[]) {
 	//--------------------------------------------------------------------------
 
 	const std::vector<std::string> symbols = {
-		"AUDCAD","AUDCHF","AUDJPY",
-		"AUDNZD","AUDUSD","CADJPY",
-		"EURAUD","EURCAD","EURCHF",
-		"EURGBP","EURJPY","EURUSD",
-		"GBPAUD","GBPCHF","GBPJPY",
-		"GBPNZD","NZDJPY","NZDUSD",
-		"USDCAD","USDCHF","USDJPY"
+		"AUDCAD",//"AUDCHF","AUDJPY",
+		//"AUDNZD","AUDUSD","CADJPY",
+		//"EURAUD","EURCAD","EURCHF",
+		//"EURGBP","EURJPY","EURUSD",
+		//"GBPAUD","GBPCHF","GBPJPY",
+		//"GBPNZD","NZDJPY","NZDUSD",
+		//"USDCAD","USDCHF","USDJPY"
 	};
 
 	trading_db::QdbHistory			history;
@@ -35,6 +35,10 @@ int main(int argc, char* argv[]) {
 		// время начала и конца тестирования (Начало 15 1 2019 - Конец 27 9 2022)
 		history_config.set_date(false, 15,1,2022);
 		history_config.set_date(true, 15,1,2023);
+
+		history_config.timeframe	= 60;
+		history_config.tick_period	= 1.0;
+		history_config.use_new_tick_mode = true;
 
 		history_config.path_db = "D:\\_repoz_trading\\mega-connector\\storage\\alpary-mt5-qdb";
 

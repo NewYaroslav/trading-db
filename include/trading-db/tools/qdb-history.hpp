@@ -20,14 +20,15 @@ namespace trading_db {
 		 */
 		class Config {
 		public:
-			std::string					path_db;				/**< Путь к папке с БД котировок */
-			std::vector<std::string>	symbols;				/**< Массив символов */
-			uint64_t					start_date		= 0;	/**< Начальная дата теста (UTC, в секундах) */
-			uint64_t					stop_date		= 0;	/**< Конечная дата теста (UTC, в секундах) */
-			double						tick_period		= 1.0;	/**< Период тиков внутри бара (в секундах) */
-			uint64_t					timeframe		= 60.0; /**< Таймфрейм исторических данных (в секундах) */
+			std::string					path_db;						/**< Путь к папке с БД котировок */
+			std::vector<std::string>	symbols;						/**< Массив символов */
+			uint64_t					start_date			= 0;		/**< Начальная дата теста (UTC, в секундах) */
+			uint64_t					stop_date			= 0;		/**< Конечная дата теста (UTC, в секундах) */
+			double						tick_period			= 1.0;		/**< Период тиков внутри бара (в секундах) */
+			uint64_t					timeframe			= 60.0;		/**< Таймфрейм исторических данных (в секундах) */
+			bool						use_new_tick_mode	= false;	/**< Режим "новый тик" разрешает событие on_test только при наступлении нового тика */
 
-			std::vector<TimePeriod>		trade_period;		/**< Периоды торговли */
+			std::vector<TimePeriod>		trade_period;					/**< Периоды торговли */
 
 			/** \brief Установить даты симулятора
 			 * Чтобы указать начальную дату, установите переменную stop = false
@@ -281,8 +282,11 @@ namespace trading_db {
 						}
 
 						// Последнее время обновления индикаторов
-						uint64_t last_update_time_ms = 0;
+						uint64_t	last_update_time_ms = 0;
+						// Наличие нового тика
+						bool		is_new_tick			= false;
 
+						const uint64_t tick_period_ms = (uint64_t)(local_config.tick_period * (double)ztime::MILLISECONDS_IN_SECOND + 0.5);
 						const uint64_t date_step_ms = ztime::SECONDS_IN_DAY * ztime::MILLISECONDS_IN_SECOND;
 						for (uint64_t
 								date_ms = start_date_ms;
@@ -309,6 +313,16 @@ namespace trading_db {
 										local_config.on_candle(s, t_ms, internal_config.period_id[i], db_candle);
 										last_update_time_ms = (db_candle.timestamp + ztime::SECONDS_IN_MINUTE) * ztime::MILLISECONDS_IN_SECOND;
 									}
+									// для режима вызова on_test по новому тику
+									if (local_config.use_new_tick_mode) {
+										trading_db::Tick db_tick;
+										if (symbols_db[s]->get_tick_ms(db_tick, t_ms)) {
+											const uint64_t prev_timestamp_ms = t_ms - tick_period_ms;
+											if (db_tick.timestamp_ms > prev_timestamp_ms) {
+												is_new_tick = true;
+											}
+										}
+									}
 									//} Вызываем on_candle
 								} else {
 									//{ Вызываем on_tick
@@ -318,15 +332,26 @@ namespace trading_db {
 										if (db_tick.timestamp_ms > last_update_time_ms) {
 											last_update_time_ms = db_tick.timestamp_ms;
 											local_config.on_tick(s, t_ms, internal_config.period_id[i], db_tick);
+											is_new_tick = true;
 										}
 										//} Проверяем, что пришел новый тик нового бара
 									}
 									//} Вызываем on_tick
 								}
 
-								if (local_config.on_test && !internal_config.period_id[i].empty()) {
-									local_config.on_test(s, t_ms, internal_config.period_id[i]);
+								//{ Вызываем on_test
+								if (local_config.on_test &&
+									!internal_config.period_id[i].empty()) {
+									if (!local_config.use_new_tick_mode) {
+										local_config.on_test(s, t_ms, internal_config.period_id[i]);
+									} else {
+										if (is_new_tick) {
+											local_config.on_test(s, t_ms, internal_config.period_id[i]);
+											is_new_tick = false;
+										}
+									}
 								}
+								//} Вызываем on_test
 							} // for i
 						} // for date_ms
 						if (local_config.on_end_test_symbol) local_config.on_end_test_symbol(s);
