@@ -32,18 +32,19 @@
 
 namespace trading_db {
 
-    /** \brief Класс для хранения котировок
+    /** \brief Class for storing quotes
      */
     class QDB {
     public:
 
-        /** \brief Конфигурация класса для хранения котировок
+        /** \brief Class configuration for storing quotes
          */
         class Config {
         public:
-            std::string symbol;         /**< Имя символа */
-            std::string source;         /**< Источник данных котировок */
-            int         digits  = 0;    /**< Количество знаков после запятой */
+            std::string symbol;         /**< Symbol name (optional) */
+            std::string source;         /**< Quote data source (optional) */
+            int         digits  = 0;    /**< The number of decimals */
+            bool        use_data_merge = false; /**< Use data merge mode */
 
             std::string title = "qdb: ";
             bool        use_log = false;
@@ -69,72 +70,115 @@ namespace trading_db {
 			}
 		}
 
+		bool read_ticks(const uint64_t t, std::map<uint64_t, ShortTick> &ticks) {
+            std::vector<uint8_t> data;
+            if (!storage.read_ticks(data, t)) {
+                print_error("error read ticks", __LINE__);
+                return false;
+            }
+            data_preparation.config.price_scale = config.digits;
+            if (!data_preparation.decompress_ticks(t, data, ticks)) {
+                print_error("error decompress ticks", __LINE__);
+                return false;
+            }
+            return true;
+		}
+
+		bool read_candles(const uint64_t t, std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> &candles) {
+            std::vector<uint8_t> data;
+            if (!storage.read_candles(data, t)) {
+                print_error("error read candles", __LINE__);
+                return false;
+            }
+            data_preparation.config.price_scale = config.digits;
+            if (!data_preparation.decompress_candles(t, data, candles)) {
+                print_error("error decompress candles", __LINE__);
+                return false;
+            }
+            return true;
+		}
+
+		bool compress_ticks(
+                const uint64_t t,
+                const std::map<uint64_t, ShortTick> &ticks,
+                std::vector<uint8_t> &data) {
+            data_preparation.config.price_scale = config.digits;
+            if (!data_preparation.compress_ticks(t, ticks, data)) {
+                print_error("error compress ticks", __LINE__);
+                return false;
+            }
+            return true;
+		}
+
+		bool compress_candles(
+                const std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> &candles,
+                std::vector<uint8_t> &data) {
+            data_preparation.config.price_scale = config.digits;
+            if (!data_preparation.compress_candles(candles, data)) {
+                print_error("error compress candles", __LINE__);
+                return false;
+            }
+            return true;
+		}
+
         void init() {
 
-            // инициализируем запись данных
+            //{ initialize data record
             writer_buffer.on_ticks = [&](
                     const std::map<uint64_t, trading_db::ShortTick> &ticks,
                     const uint64_t t) {
                 const uint64_t start_time = ztime::get_first_timestamp_hour(t);
-
-                std::vector<uint8_t> data;
-                data_preparation.config.price_scale = config.digits;
-                if (!data_preparation.compress_ticks(start_time, ticks, data)) {
-                    print_error("error compress ticks", __LINE__);
-                    return;
+                std::map<uint64_t, ShortTick> new_ticks(ticks);
+                if (config.use_data_merge) {
+                    std::map<uint64_t, ShortTick> prev_ticks;
+                    if (read_ticks(start_time, prev_ticks)) {
+                        new_ticks.insert(prev_ticks.begin(), prev_ticks.end());
+                    }
                 }
-                if (!data.empty()) write_ticks_buffer[start_time] = data;
+                std::vector<uint8_t> data;
+                if (compress_ticks(start_time, new_ticks, data)) {
+                    if (!data.empty()) write_ticks_buffer[start_time] = data;
+                }
             };
 
             writer_buffer.on_candles = [&](
                     const std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> &candles,
                     const uint64_t t) {
                 const uint64_t start_time = ztime::get_first_timestamp_day(t);
-
-                // сжимаем данные
-                std::vector<uint8_t> data;
-                data_preparation.config.price_scale = config.digits;
-                if (!data_preparation.compress_candles(candles, data)) {
-                    print_error("error compress candles", __LINE__);
-                    return;
+                std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> new_candles(candles);
+                if (config.use_data_merge) {
+                    std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> prev_candles;
+                    if (read_candles(start_time, prev_candles)) {
+                        for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+                            if (!new_candles[i].empty()) prev_candles[i] = new_candles[i];
+                        }
+                        new_candles = prev_candles;
+                    }
                 }
-                if (!data.empty()) write_candles_buffer[start_time] = data;
+                std::vector<uint8_t> data;
+                if (compress_candles(new_candles, data)) {
+                    if (!data.empty()) write_candles_buffer[start_time] = data;
+                }
             };
+            //}
 
-            // инициализируем чтение
+            //{ initialize reading
             price_buffer.on_read_ticks = [&](const uint64_t t) -> std::map<uint64_t, trading_db::ShortTick> {
                 std::map<uint64_t, ShortTick> temp;
-
-                std::vector<uint8_t> data;
-                if (!storage.read_ticks(data, t)) {
-                    print_error("error read ticks", __LINE__);
-                    return temp;
-                }
-
-                data_preparation.config.price_scale = config.digits;
-                if (!data_preparation.decompress_ticks(t, data, temp)) {
-                    print_error("error decompress ticks", __LINE__);
-                    return temp;
+                if (!read_ticks(t, temp)) {
+                    print_error("error read ticks [price_buffer]", __LINE__);
                 }
                 return temp;
             };
 
             price_buffer.on_read_candles = [&](const uint64_t t) -> std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> {
                 std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> temp;
-
-                std::vector<uint8_t> data;
-                if (!storage.read_candles(data, t)) {
-                    print_error("error read ticks", __LINE__);
-                    return temp;
-                }
-
-                data_preparation.config.price_scale = config.digits;
-                if (!data_preparation.decompress_candles(t, data, temp)) {
-                    print_error("error decompress candles", __LINE__);
-                    return temp;
+                if (!read_candles(t, temp)) {
+                    print_error("error read candles [price_buffer]", __LINE__);
                 }
                 return temp;
             };
+            //}
 
         }
 

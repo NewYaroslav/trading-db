@@ -133,7 +133,6 @@ namespace trading_db {
 				tick.ask = it_last->second.ask;
 				tick.bid = it_last->second.bid;
 				tick.timestamp_ms = it_last->first;
-				return true;
 			} else {
 
 				// проверяем мертвое время
@@ -143,9 +142,8 @@ namespace trading_db {
 				tick.ask = it_tick->second.ask;
 				tick.bid = it_tick->second.bid;
 				tick.timestamp_ms = it_tick->first;
-				return true;
 			}
-			return false;
+			return true;
 		}
 
 		bool get_ticks_buffer(std::vector<Tick> &ticks, const uint64_t t_ms_start, const uint64_t t_ms_stop) noexcept {
