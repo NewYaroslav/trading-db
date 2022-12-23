@@ -391,6 +391,52 @@ namespace trading_db {
 			return std::move(meta_data);
 		}
 
+		inline bool get_uint64_value(utility::SqliteStmt &stmt, uint64_t &value) noexcept {
+			int err = 0;
+			while (true) {
+				if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
+					print_error("sqlite3_reset return code " + std::to_string(err), __LINE__);
+					return false;
+				}
+
+				err = sqlite3_step(stmt.get());
+				if(err == SQLITE_DONE) {
+					sqlite3_reset(stmt.get());
+					return false;
+				} else
+				if(err == SQLITE_BUSY) {
+					sqlite3_reset(stmt.get());
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					continue;
+				} else
+				if (err != SQLITE_ROW) {
+					sqlite3_reset(stmt.get());
+					print_error("sqlite3_step return code " + std::to_string(err), __LINE__);
+					return false;
+				}
+
+				value = (uint64_t)sqlite3_column_int64(stmt.get(), 0);
+				err = sqlite3_step(stmt.get());
+
+				if (err == SQLITE_ROW) {
+					break;
+				} else
+				if(err == SQLITE_DONE) {
+					sqlite3_reset(stmt.get());
+					break;
+				} else
+				if(err == SQLITE_BUSY) {
+					sqlite3_reset(stmt.get());
+					print_error("sqlite3_step return SQLITE_BUSY", __LINE__);
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					continue;
+				}
+				break;
+			}
+
+			return true;
+		}
+
 		const bool check_init_db() noexcept {
 			return (sqlite_db != nullptr);
 		}
@@ -405,15 +451,37 @@ namespace trading_db {
 			if (sqlite_db != nullptr) sqlite3_close_v2(sqlite_db);
 		};
 
-		/** \brief Открыть БД
-		 * \param path		Путь к файлу БД
-		 * \param readonly	Флаг 'только чтение'
-		 * \return Вернет true в случае успешной инициализации
+		/** \brief Open database
+		 * \param path		Path to the database file
+		 * \param readonly	'read-only' flag
+		 * \return Will return true if initialization is successful
 		 */
 		inline bool open(const std::string &path, const bool readonly = false) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (check_init_db()) return false;
 			return init_db(path, readonly);
+		}
+
+		inline bool get_min_max_date(const bool use_tick_data, uint64_t &t_min, uint64_t &t_max) {
+            utility::SqliteStmt stmt_min;
+            utility::SqliteStmt stmt_max;
+            if (use_tick_data) {
+                stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.tick_table + "'");
+                stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.tick_table + "'");
+                if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
+                    t_max += ztime::SECONDS_IN_HOUR;
+                    return true;
+                }
+            } else {
+                stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.candle_table + "'");
+                stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.candle_table + "'");
+                if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
+                    t_max += ztime::SECONDS_IN_DAY;
+                    return true;
+                }
+            }
+            t_min = t_max = 0;
+            return false;
 		}
 
 		inline bool read_candles(std::vector<uint8_t> &data, const uint64_t t) noexcept {

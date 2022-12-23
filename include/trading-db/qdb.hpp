@@ -186,13 +186,8 @@ namespace trading_db {
 
         using METADATA_TYPE = QdbStorage::METADATA_TYPE;
 
-        QDB() {
-            init();
-        }
-
-        ~QDB() {
-
-        }
+        QDB() {init();}
+        ~QDB() {}
 
         //----------------------------------------------------------------------
 
@@ -260,7 +255,7 @@ namespace trading_db {
             return storage.get_info_int(type);
 		}
 
-		inline bool set_info_str(const QdbStorage::METADATA_TYPE type, const std::string &value) {
+		inline bool set_info_str(const QdbStorage::METADATA_TYPE type, const std::string &value) noexcept {
             switch (type) {
             case QdbStorage::METADATA_TYPE::SYMBOL_NAME:
                 config.symbol = value;
@@ -274,7 +269,7 @@ namespace trading_db {
             return storage.set_info_str(type, value);
 		}
 
-		inline bool set_info_int(const QdbStorage::METADATA_TYPE type, const int value) {
+		inline bool set_info_int(const QdbStorage::METADATA_TYPE type, const int value) noexcept {
             switch (type) {
             case QdbStorage::METADATA_TYPE::SYMBOL_DIGITS:
                 config.digits = value;
@@ -285,23 +280,30 @@ namespace trading_db {
             return storage.set_info_int(type, value);
 		}
 
+		inline bool get_min_max_date(const bool use_tick_data, uint64_t &t_min, uint64_t &t_max) {
+            return storage.get_min_max_date(use_tick_data, t_min, t_max);
+		}
 
         //----------------------------------------------------------------------
         // методы для чтения данных
 
-        bool get_candle(Candle &candle,
+        inline bool get_candle(Candle &candle,
                 const uint64_t t,
                 const QDB_TIMEFRAMES p = QDB_TIMEFRAMES::PERIOD_M1,
-                const QDB_CANDLE_MODE m = QDB_CANDLE_MODE::SRC_CANDLE) {
+                const QDB_CANDLE_MODE m = QDB_CANDLE_MODE::SRC_CANDLE) noexcept {
             return price_buffer.get_candle(candle, t, p, m);
         }
 
-        bool get_tick(Tick &tick, const uint64_t t) {
+        inline bool get_tick(Tick &tick, const uint64_t t) noexcept {
             return price_buffer.get_tick(tick, t);
         }
 
-        bool get_tick_ms(Tick &tick, const uint64_t t_ms) {
+        inline bool get_tick_ms(Tick &tick, const uint64_t t_ms) noexcept {
             return price_buffer.get_tick_ms(tick, t_ms);
+        }
+
+        inline bool get_next_tick_ms(Tick &tick, const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
+            return price_buffer.get_next_tick_ms(tick, t_ms, t_ms_max);
         }
     };
 

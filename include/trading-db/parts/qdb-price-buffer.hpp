@@ -61,24 +61,10 @@ namespace trading_db {
 			tick_buffer[time_hour][tick.timestamp_ms] = short_tick;
 		}
 
-		inline bool check_tick_buffer(const uint64_t t_ms) noexcept {
-			const uint64_t t = t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
-			const uint64_t rd_time = ztime::get_first_timestamp_hour(t);
-			auto it = tick_buffer.find(rd_time);
-			if (it == tick_buffer.end()) return false;
-			if (it == tick_buffer.begin()) {
-				if (it->second.begin()->first > t_ms) return false;
-			}
-			return true;
-		}
-
-		// читаем тиковый буфер
 		void read_tick_buffer(const uint64_t t_ms) noexcept {
-
 			const uint64_t t = t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
-			const uint64_t start_time = ztime::get_first_timestamp_hour(t - config.tick_start);
-			const uint64_t stop_time = t == 0 ? t : ztime::get_first_timestamp_hour(t + config.tick_stop);
-
+			const uint64_t start_time = t <= config.tick_start ? 0 : ztime::get_first_timestamp_hour(t - config.tick_start);
+			const uint64_t stop_time = ztime::get_first_timestamp_hour(t + config.tick_stop);
 			for (uint64_t rd_time = start_time; rd_time <= stop_time; rd_time += ztime::SECONDS_IN_HOUR) {
 				if (tick_buffer.find(rd_time) == tick_buffer.end()) {
 					tick_buffer[rd_time] = on_read_ticks(rd_time);
@@ -86,13 +72,49 @@ namespace trading_db {
 			}
 		}
 
+		void read_next_tick_buffer(const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
+			const uint64_t t = t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
+			const uint64_t t_max = t_ms_max/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
+
+			const uint64_t start_time = ztime::get_first_timestamp_hour(t);
+			uint64_t stop_time = ztime::get_first_timestamp_hour(t + config.tick_stop);
+
+			bool has_last_tick = false;
+			uint64_t rd_time = start_time;
+			while(!false) {
+                if (tick_buffer.find(rd_time) == tick_buffer.end()) {
+                    auto data = on_read_ticks(rd_time);
+                    tick_buffer[rd_time] = data;
+                    if (!has_last_tick && !data.empty()) {
+                        if (std::prev(data.end())->first > t_ms) {
+                            has_last_tick = true;
+                        }
+                    }
+                }
+                rd_time += ztime::SECONDS_IN_HOUR;
+                if (rd_time > stop_time && has_last_tick) break;
+                if (rd_time > t_max) break;
+			}
+		}
+
 		// очищаем тиковый буфре
 		void erase_tick_buffer(const uint64_t t_ms) noexcept {
-
 			const uint64_t t = t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
-			const uint64_t start_time = ztime::get_first_timestamp_hour(t - config.tick_start);
-			const uint64_t stop_time = t == 0 ? t : ztime::get_first_timestamp_hour(t + config.tick_stop);
+			const uint64_t start_time =  t <= config.tick_start ? 0 : ztime::get_first_timestamp_hour(t - config.tick_start);
+			const uint64_t stop_time = ztime::get_first_timestamp_hour(t + config.tick_stop);
+			auto it = tick_buffer.begin();
+			while (it != tick_buffer.end()) {
+				if (it->first < start_time || it->first > stop_time) {
+					it = tick_buffer.erase(it);
+				} else ++it;
+			}
+		}
 
+		void erase_next_tick_buffer(const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
+			const uint64_t t = t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
+			const uint64_t t_max = t_ms_max/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
+			const uint64_t start_time = ztime::get_first_timestamp_hour(t);
+			const uint64_t stop_time = ztime::get_first_timestamp_hour(t_max);
 			auto it = tick_buffer.begin();
 			while (it != tick_buffer.end()) {
 				if (it->first < start_time || it->first > stop_time) {
@@ -146,18 +168,50 @@ namespace trading_db {
 			return true;
 		}
 
+		bool get_next_tick_buffer(Tick &tick, const uint64_t t_ms) noexcept {
+			const uint64_t time_hour = ztime::get_first_timestamp_hour(t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND);
+			auto it = tick_buffer.find(time_hour);
+			if (it == tick_buffer.end()) return false;
+			auto &buff = it->second;
+			// находим последний тик
+			auto it_tick = buff.upper_bound(t_ms);
+
+			if (it_tick == buff.end()) {
+				// тика нет, ищем последний тик в следующих массивах
+				// проверяем, есть ли данные в буфере
+				if (it == std::prev(tick_buffer.end())) return false;
+				auto it_prev = it;
+				while (it_prev != tick_buffer.end()) {
+					// получаем следующий час тиков
+					it_prev = std::next(it_prev);
+					// проверяем наличие данных в буфере
+					if (!it_prev->second.empty()) break;
+				}
+				if (it_prev->second.empty()) return false;
+				// находим первый тик следующего часа
+				auto it_first = it_prev->second.begin();
+
+				tick.ask = it_first->second.ask;
+				tick.bid = it_first->second.bid;
+				tick.timestamp_ms = it_first->first;
+			} else {
+				tick.ask = it_tick->second.ask;
+				tick.bid = it_tick->second.bid;
+				tick.timestamp_ms = it_tick->first;
+			}
+			return true;
+		}
+
 		bool get_ticks_buffer(std::vector<Tick> &ticks, const uint64_t t_ms_start, const uint64_t t_ms_stop) noexcept {
 			const uint64_t start_time = ztime::get_first_timestamp_hour((t_ms_start/(uint64_t)ztime::MILLISECONDS_IN_SECOND));
 			const uint64_t stop_time = ztime::get_first_timestamp_hour((t_ms_stop/(uint64_t)ztime::MILLISECONDS_IN_SECOND));
 
 			auto it_start = tick_buffer.find(start_time);
 			if (it_start == tick_buffer.end() || it_start->second.empty()) {
-				std::cout << "-1" << std::endl;
+
 				// проверяем, есть ли данные в буфере
 				if (it_start == tick_buffer.begin()) return false;
 				auto it_prev = it_start;
-
-				std::cout << "-2" << std::endl;
 
 				while (it_prev != tick_buffer.begin()) {
 					// получаем предыдущий час тиков
@@ -167,12 +221,8 @@ namespace trading_db {
 				}
 				if (it_prev->second.empty()) return false;
 
-				std::cout << "-3" << std::endl;
-
 				// находим последний тик предыдущего часа
 				auto it_last = std::prev(it_prev->second.end());
-
-				std::cout << "-4" << std::endl;
 
 				Tick tick;
 				tick.ask = it_last->second.ask;
@@ -182,18 +232,11 @@ namespace trading_db {
 
 				it_prev++;
 				it_start = it_prev;
-
-				std::cout << "-5" << std::endl;
-
 				if (it_start == tick_buffer.end()) return true;
-
-				std::cout << "-6" << std::endl;
 			}
 
 			auto it_stop = tick_buffer.find(stop_time);
 			if (it_stop == tick_buffer.end() || it_stop->second.empty()) {
-
-				std::cout << "-7" << std::endl;
 
 				// проверяем, есть ли данные в буфере
 				if (it_stop == tick_buffer.begin()) {
@@ -202,20 +245,18 @@ namespace trading_db {
 				}
 				auto it_prev = it_stop;
 
-				std::cout << "-8" << std::endl;
-
 				while (it_prev != tick_buffer.begin()) {
 					// получаем предыдущий час тиков
 					it_prev = std::prev(it_prev);
 					// проверяем наличие данных в буфере
 					if (!it_prev->second.empty()) break;
 				}
-				std::cout << "-9" << std::endl;
+
 				if (it_prev->second.empty()) {
 					if (ticks.empty()) return false;
 					return true;
 				}
-				std::cout << "-10" << std::endl;
+
 				// находим последний тик предыдущего часа
 				auto it_last = std::prev(it_prev->second.end());
 
@@ -224,12 +265,7 @@ namespace trading_db {
 				tick.bid = it_last->second.bid;
 				tick.timestamp_ms = it_last->first;
 
-				std::cout << "-11" << std::endl;
-
 				if (!ticks.empty() && tick.timestamp_ms <= ticks.back().timestamp_ms) return true;
-
-				std::cout << "-12" << std::endl;
-
 				it_stop = it_prev;
 			}
 
@@ -338,9 +374,9 @@ namespace trading_db {
 			return true;
 		}
 
-		// данные баров за день
+		// bar data per day
 		using candles_day = std::array<Candle, ztime::MINUTES_IN_DAY>;
-		// массив баров по дням
+		// array of bars/candle by day
 		std::map<uint64_t, candles_day> candle_buffer;
 
 		inline bool check_candle_buffer(const uint64_t t) noexcept {
@@ -350,7 +386,6 @@ namespace trading_db {
 			return true;
 		}
 
-		// читаем свечной буфер
 		void read_candle_buffer(const uint64_t t) noexcept {
 			const uint64_t start_time = ztime::get_first_timestamp_day(t - config.candle_start);
 			const uint64_t stop_time = ztime::get_first_timestamp_day(t + config.candle_stop);
@@ -361,7 +396,6 @@ namespace trading_db {
 			}
 		}
 
-		// очищаем свечной буфре
 		void erase_candle_buffer(const uint64_t t) noexcept {
 			const uint64_t start_time = ztime::get_first_timestamp_day(t - config.candle_start);
 			const uint64_t stop_time = ztime::get_first_timestamp_day(t + config.candle_stop);
@@ -399,7 +433,7 @@ namespace trading_db {
 				case QDB_TIMEFRAMES::PERIOD_D1: {
 						const uint64_t candle_period = static_cast<uint64_t>(p);
 						const uint64_t start_minute_day = minute_day - minute_day % candle_period;
-						// формируем новый бар
+						// form a new bar
 						Candle new_candle;
 						new_candle.timestamp = start_minute_day * ztime::SECONDS_IN_MINUTE + time_day;
 						for (uint64_t m = start_minute_day; m <= minute_day; ++m) {
@@ -428,7 +462,7 @@ namespace trading_db {
 				const uint64_t time_start = (t - (t % (candle_period * ztime::SECONDS_IN_MINUTE)));
 				const uint64_t time_start_ms = time_start * ztime::MILLISECONDS_IN_SECOND;
 				const uint64_t time_stop_ms = t * ztime::MILLISECONDS_IN_SECOND;
-				// получаем массив тиков для формирования неполного бара
+				// get an array of ticks to form an incomplete bar
 				std::vector<Tick> ticks;
 				if (!get_ticks_buffer(
 					ticks,
@@ -477,20 +511,18 @@ namespace trading_db {
 			switch (m) {
 			case QDB_CANDLE_MODE::SRC_CANDLE: {
 					if (!check_candle_buffer(t)) {
-						// загружаем историю
 						read_candle_buffer(t);
-						// удаляем из буфера
 						erase_candle_buffer(t);
 					}
 				}
 				break;
 			case QDB_CANDLE_MODE::SRC_TICK: {
 					const uint64_t t_ms = t * (uint64_t)ztime::MILLISECONDS_IN_SECOND;
-					if (!check_tick_buffer(t_ms)) {
-						// загружаем историю
-						read_tick_buffer(t_ms);
-						// удаляем из буфера
+					// ! Тут надо переделать реализацию
+					Tick tick;
+					if (!get_tick_buffer(tick, t_ms)) {
 						erase_tick_buffer(t_ms);
+						read_tick_buffer(t_ms);
 					}
 				}
 				break;
@@ -500,23 +532,30 @@ namespace trading_db {
 
 		bool get_tick(Tick &tick, const uint64_t t) noexcept {
 			const uint64_t t_ms = t * (uint64_t)ztime::MILLISECONDS_IN_SECOND;
-			if (!check_tick_buffer(t_ms)) {
-				// загружаем историю
-				read_tick_buffer(t_ms);
-				// удаляем из буфера
+			if (!get_tick_buffer(tick, t_ms)) {
 				erase_tick_buffer(t_ms);
+				read_tick_buffer(t_ms);
+				return get_tick_buffer(tick, t_ms);
 			}
-			return get_tick_buffer(tick, t_ms);
+			return true;
 		}
 
 		bool get_tick_ms(Tick &tick, const uint64_t t_ms) noexcept {
-			if (!check_tick_buffer(t_ms)) {
-				// загружаем историю
-				read_tick_buffer(t_ms);
-				// удаляем из буфера
-				erase_tick_buffer(t_ms);
+			if (!get_tick_buffer(tick, t_ms)) {
+                erase_tick_buffer(t_ms);
+                read_tick_buffer(t_ms);
+				return get_tick_buffer(tick, t_ms);
 			}
-			return get_tick_buffer(tick, t_ms);
+			return true;
+		}
+
+		bool get_next_tick_ms(Tick &tick, const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
+			if (!get_next_tick_buffer(tick, t_ms)) {
+                erase_tick_buffer(t_ms);
+                read_next_tick_buffer(t_ms, t_ms_max);
+                return get_next_tick_buffer(tick, t_ms);
+			}
+			return true;
 		}
 
 	};
