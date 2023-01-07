@@ -12,6 +12,11 @@ int main() {
     std::cout << "t_min: " << ztime::get_str_date_time(t_min) << std::endl;
     std::cout << "t_max: " << ztime::get_str_date_time(t_max) << std::endl;
 
+    using METADATA_TYPE = trading_db::QdbStorage::METADATA_TYPE;
+    std::cout << "'symbol' = " << qdb.get_info_str(METADATA_TYPE::SYMBOL_NAME) << std::endl;
+    std::cout << "'digits' = " << qdb.get_info_int(METADATA_TYPE::SYMBOL_DIGITS) << std::endl;
+    std::cout << "'digits' = " << qdb.config.digits << std::endl;
+
     std::system("pause");
     {
         uint64_t counter = 0;

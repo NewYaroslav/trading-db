@@ -30,8 +30,10 @@ namespace trading_db {
 			int64_t		time_zone = 0;
 		} config;
 
-		std::function<void(const Tick &tick)>		 on_tick = nullptr;
-		std::function<void(const Candle &candle)>	 on_candle = nullptr;
+		std::function<void(const Tick &tick)>		 on_tick    = nullptr;
+		std::function<void(const Candle &candle)>	 on_candle  = nullptr;
+		std::function<uint64_t(uint64_t const t)>	 on_change_timezone     = nullptr;
+		std::function<uint64_t(uint64_t const t)>	 on_change_timezone_ms  = nullptr;
 
 	private:
 
@@ -63,10 +65,12 @@ namespace trading_db {
 		}
 
 		inline uint64_t change_timezone_ms(const uint64_t t_ms) noexcept {
+			if (on_change_timezone_ms) return on_change_timezone_ms(t_ms);
 			return (uint64_t)((int64_t)t_ms + config.time_zone * (int64_t)ztime::MILLISECONDS_IN_SECOND);
 		}
 
 		inline uint64_t change_timezone(const uint64_t t) noexcept {
+			if (on_change_timezone) return on_change_timezone(t);
 			return (uint64_t)((int64_t)t + config.time_zone);
 		}
 
@@ -79,13 +83,6 @@ namespace trading_db {
 				std::vector<std::string> elemets;
 				parse_line_v2(buffer, elemets);
 				if (elemets.empty()) break;
-
-				/*
-				std::cout << "elemets.size() = " << elemets.size() << std::endl;
-				for (size_t i = 0; i < elemets.size(); ++i) {
-					std::cout << "[" << i << "] = " << elemets[i] << std::endl;
-				}
-				*/
 
 				int flag = 0;
 				if (elemets.size() == 7) {
@@ -152,36 +149,6 @@ namespace trading_db {
 			}
 			switch (config.type) {
 			case QdbCsvType::MT5_CSV_TICKS_FILE:
-					/*
-					// получаем заголовок файла
-					std::getline(file, buffer);
-					Tick tick;
-					while(!file.eof()) {
-						std::getline(file, buffer);
-						std::vector<std::string> elemets;
-						parse_line(buffer, elemets);
-						if (elemets.empty()) break;
-						const int flag = std::stoi(elemets.back());
-						tick.timestamp_ms = change_timezone(ztime::to_timestamp_ms(elemets[0] + " " + elemets[1]));
-
-						switch (flag) {
-						case 2:
-							// читаем bid
-							tick.bid = std::stod(elemets[2]);
-							break;
-						case 4:
-							// читаем ask
-							tick.ask = std::stod(elemets[2]);
-							break;
-						case 6:
-							// читаем bid и ask
-							tick.bid = std::stod(elemets[2]);
-							tick.ask = std::stod(elemets[3]);
-							break;
-						};
-						if (on_tick && tick.bid && tick.ask) on_tick(tick);
-					}
-				*/
 				return parse_mt5_ticks(file);
 			case QdbCsvType::MT5_CSV_CANDLES_FILE:
 				return parse_mt5_candles(file);
