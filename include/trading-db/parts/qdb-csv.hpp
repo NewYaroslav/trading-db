@@ -32,8 +32,8 @@ namespace trading_db {
 
 		std::function<void(const Tick &tick)>		 on_tick    = nullptr;
 		std::function<void(const Candle &candle)>	 on_candle  = nullptr;
-		std::function<uint64_t(uint64_t const t)>	 on_change_timezone     = nullptr;
-		std::function<uint64_t(uint64_t const t)>	 on_change_timezone_ms  = nullptr;
+		std::function<uint64_t(const uint64_t t)>	 on_change_timezone     = nullptr;
+		std::function<uint64_t(const uint64_t t)>	 on_change_timezone_ms  = nullptr;
 
 	private:
 
