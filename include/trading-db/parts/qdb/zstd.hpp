@@ -6,11 +6,13 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "enums.hpp"
+#include "data-classes.hpp"
+#include "..\..\utils\files.hpp"
 #include "zdict.h"
 #include "zstd.h"
 #include "ztime.hpp"
-#include "qdb-common.hpp"
-#include "files.hpp"
+
 
 namespace trading_db {
 
@@ -57,7 +59,7 @@ namespace trading_db {
 		unsigned long files_size = 0;
 		unsigned long files_counter = 0;
 		for (size_t i = 0; i < files_list.size(); ++i) {
-			unsigned long file_size = utility::get_file_size(files_list[i]);
+			unsigned long file_size = utils::get_file_size(files_list[i]);
 			if(file_size > 0) {
 				files_size += file_size;
 				files_counter++;
@@ -70,14 +72,14 @@ namespace trading_db {
 
 		// заполним буферы образцов
 		for (size_t i = 0; i < files_list.size(); ++i) {
-			unsigned long file_size = utility::get_file_size(files_list[i]);
+			unsigned long file_size = utils::get_file_size(files_list[i]);
 			if (file_size > 0) {
 				num_files++;
 				size_t start_pos = all_files_size;
 				all_files_size += file_size;
 				samples_size[num_files - 1] = file_size;
 
-				unsigned long err = utility::load_file(files_list[i], samples_buffer, all_files_size, start_pos);
+				unsigned long err = utils::load_file(files_list[i], samples_buffer, all_files_size, start_pos);
 				if (err != file_size) {
 					std::cout << "read file error, file: " << files_list[i] << " size: " << err << std::endl;
 					if (samples_buffer) free(samples_buffer);
@@ -101,7 +103,7 @@ namespace trading_db {
 		size_t file_size = ZDICT_trainFromBuffer(dict_buffer, dict_buffer_capacit, samples_buffer, samples_size, num_files);
 
 		if (is_file) {
-			size_t err = utility::write_file(path, dict_buffer, file_size);
+			size_t err = utils::write_file(path, dict_buffer, file_size);
 			return (err > 0);
 		} else {
 			std::string dictionary_name_upper = str_toupper(name);
@@ -127,8 +129,8 @@ namespace trading_db {
 			}
 			out += "}\n";
 			out += "#endif // DICTIONARY_" + dictionary_name_upper + "_HPP_INCLUDED\n";
-			std::string path_out = utility::set_file_extension(path, ".hpp");
-			size_t err = utility::write_file(path_out, (void*)out.c_str(), out.size());
+			std::string path_out = utils::set_file_extension(path, ".hpp");
+			size_t err = utils::write_file(path_out, (void*)out.c_str(), out.size());
 			return (err > 0);
 		}
 	}
@@ -149,7 +151,7 @@ namespace trading_db {
 		size_t num_files = 0;
 		size_t *samples_size = NULL;
 		for(size_t i = 0; i < files_list.size(); ++i) {
-			int file_size = utility::get_file_size(files_list[i]);
+			int file_size = utils::get_file_size(files_list[i]);
 			if(file_size > 0) {
 				num_files++;
 				size_t start_pos = all_files_size;
@@ -158,7 +160,7 @@ namespace trading_db {
 				samples_buffer = realloc(samples_buffer, all_files_size);
 				samples_size = (size_t*)realloc((void*)samples_size, num_files * sizeof(size_t));
 				samples_size[num_files - 1] = file_size;
-				int err = utility::load_file(files_list[i], samples_buffer, all_files_size, start_pos);
+				int err = utils::load_file(files_list[i], samples_buffer, all_files_size, start_pos);
 				if(err != file_size) {
 					std::cout << "load file: error, " << files_list[i] << std::endl;
 					if(samples_buffer != NULL)
@@ -182,7 +184,7 @@ namespace trading_db {
 		dict_buffer = malloc(dict_buffer_capacit);
 		memset(dict_buffer, 0, dict_buffer_capacit);
 		size_t file_size = ZDICT_trainFromBuffer(dict_buffer, dict_buffer_capacit, samples_buffer, samples_size, num_files);
-		size_t err = utility::write_file(file_name, dict_buffer, file_size);
+		size_t err = utils::write_file(file_name, dict_buffer, file_size);
 		return (err > 0);
 	}
 
@@ -193,13 +195,13 @@ namespace trading_db {
 	 */
 	bool train_zstd(std::string path, std::string file_name, size_t dict_buffer_capacit = 102400) {
 		std::vector<std::string> files_list;
-		utility::get_list_files(path, files_list, true);
+		utils::get_list_files(path, files_list, true);
 		return train_zstd(files_list, file_name, dict_buffer_capacit);
 	}
 
 	bool train_zstd(const std::string &path, const std::string &file_name, const std::string &dict_name, size_t dict_buffer_capacit = 102400) {
 		std::vector<std::string> files_list;
-		utility::get_list_files(path, files_list, true);
+		utils::get_list_files(path, files_list, true);
 		return train_zstd(files_list, file_name, dict_name, dict_buffer_capacit, false);
 	}
 
@@ -215,10 +217,10 @@ namespace trading_db {
 			std::string output_file,
 			std::string dictionary_file,
 			int compress_level = ZSTD_maxCLevel()) {
-		int input_file_size = utility::get_file_size(input_file);
+		int input_file_size = utils::get_file_size(input_file);
 		if(input_file_size <= 0) return false;
 
-		int dictionary_file_size = utility::get_file_size(dictionary_file);
+		int dictionary_file_size = utils::get_file_size(dictionary_file);
 		if(dictionary_file_size <= 0) return false;
 
 		void *input_file_buffer = NULL;
@@ -229,8 +231,8 @@ namespace trading_db {
 		dictionary_file_buffer = malloc(dictionary_file_size);
 		memset(dictionary_file_buffer, 0, dictionary_file_size);
 
-		utility::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
-		utility::load_file(input_file, input_file_buffer, input_file_size);
+		utils::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
+		utils::load_file(input_file, input_file_buffer, input_file_size);
 
 		size_t compress_file_size = ZSTD_compressBound(input_file_size);
 		void *compress_file_buffer = NULL;
@@ -258,7 +260,7 @@ namespace trading_db {
 			return false;
 		}
 
-		utility::write_file(output_file, compress_file_buffer, compress_size);
+		utils::write_file(output_file, compress_file_buffer, compress_size);
 
 		ZSTD_freeCCtx(cctx);
 		free(compress_file_buffer);
@@ -277,13 +279,11 @@ namespace trading_db {
 			std::string input_file,
 			std::string output_file,
 			std::string dictionary_file) {
-		int input_file_size = utility::get_file_size(input_file);
-		if (input_file_size <= 0)
-			return false;
+		int input_file_size = utils::get_file_size(input_file);
+		if (input_file_size <= 0) return false;
 
-		int dictionary_file_size = utility::get_file_size(dictionary_file);
-		if (dictionary_file_size <= 0)
-			return false;
+		int dictionary_file_size = utils::get_file_size(dictionary_file);
+		if (dictionary_file_size <= 0) return false;
 
 		void *input_file_buffer = NULL;
 		input_file_buffer = malloc(input_file_size);
@@ -293,8 +293,8 @@ namespace trading_db {
 		dictionary_file_buffer = malloc(dictionary_file_size);
 		memset(dictionary_file_buffer, 0, dictionary_file_size);
 
-		utility::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
-		utility::load_file(input_file, input_file_buffer, input_file_size);
+		utils::load_file(dictionary_file, dictionary_file_buffer, dictionary_file_size);
+		utils::load_file(input_file, input_file_buffer, input_file_size);
 
 		unsigned long long const decompress_file_size = ZSTD_getFrameContentSize(input_file_buffer, input_file_size);
 		if (decompress_file_size == ZSTD_CONTENTSIZE_ERROR) {
@@ -332,7 +332,7 @@ namespace trading_db {
 			return false;
 		}
 
-		utility::write_file(output_file, decompress_file_buffer, decompress_size);
+		utils::write_file(output_file, decompress_file_buffer, decompress_size);
 
 		ZSTD_freeDCtx(dctx);
 		free(decompress_file_buffer);

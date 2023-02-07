@@ -1,11 +1,11 @@
 #pragma once
-#ifndef TRADING_DB_BET_DATABASE_PARTS_COMMON_HPP_INCLUDED
-#define TRADING_DB_BET_DATABASE_PARTS_COMMON_HPP_INCLUDED
+#ifndef TRADING_DB_BO_TRADES_DB_PARTS_COMMON_HPP_INCLUDED
+#define TRADING_DB_BO_TRADES_DB_PARTS_COMMON_HPP_INCLUDED
 
 #include <string>
 
 namespace trading_db {
-	namespace bet_database {
+	namespace bo_trades_db {
 
 		/// Направление ставки
 		enum class ContractType {
@@ -21,7 +21,7 @@ namespace trading_db {
 		};
 
 		/// Состояния сделки
-		enum class BetStatus {
+		enum class BoStatus {
 			UNKNOWN_STATE,			/**< Неопределенное состояние уже открытой сделки */
 			OPENING_ERROR,			/**< Ошибка открытия */
 			CHECK_ERROR,			/**< Ошибка проверки результата сделки */
@@ -43,7 +43,7 @@ namespace trading_db {
 
 		/** \brief Класс ставки БО
 		 */
-		class BetData {
+		class BoResult {
 		public:
 			int64_t uid			= 0;	/// ключ - уникальный ID сделки в БД
 			int64_t broker_id	= 0;	/// уникальный номер сделки, который присваивает брокер
@@ -65,9 +65,9 @@ namespace trading_db {
 			bool demo			= true;	/// флаг демо аккаунта
 			bool last			= true;	/// флаг последней сделки - для подсчета винрейта в системах риск-менджента типа мартингейла и т.п.
 
-			ContractType contract_type	= ContractType::UNKNOWN_STATE;	/// тип контракта, см.BetContractType
-			BetStatus status			= BetStatus::UNKNOWN_STATE;		/// состояние сделки, см.BetStatus
-			BoType type					= BoType::SPRINT;				/// тип бинарного опциона(SPRINT, CLASSIC и т.д.), см.BetType
+			ContractType contract_type	= ContractType::UNKNOWN_STATE;	/// тип контракта, см.ContractType
+			BoStatus status			    = BoStatus::UNKNOWN_STATE;		/// состояние сделки, см.BoStatus
+			BoType type					= BoType::SPRINT;				/// тип бинарного опциона(SPRINT, CLASSIC и т.д.), см.BoType
 
 			std::string symbol;		/// имя символа(валютная пара, акции, индекс и пр., например EURUSD)
 			std::string broker;		/// имя брокера
@@ -76,8 +76,8 @@ namespace trading_db {
 			std::string comment;	/// комментарий
 			std::string user_data;	/// данные пользователя
 
-			BetData() {};
+			BoResult() {};
 		};
-	};
+	}; // bo_trades_db
 };
-#endif // TRADING_DB_BET_DATABASE_PARTS_COMMON_HPP_INCLUDED
+#endif // TRADING_DB_BO_TRADES_DB_PARTS_COMMON_HPP_INCLUDED

@@ -1,8 +1,8 @@
 #include <iostream>
-#include "../../include/trading-db/parts/qdb-csv.hpp"
-#include "../../include/trading-db/parts/qdb-writer-price-buffer.hpp"
-#include "../../include/trading-db/parts/qdb-zstd.hpp"
-#include "../../include/trading-db/parts/qdb-compact-dataset.hpp"
+#include "../../include/trading-db/tools/qdb/csv.hpp"
+#include "../../include/trading-db/parts/qdb/writer-price-buffer.hpp"
+#include "../../include/trading-db/parts/qdb/zstd.hpp"
+#include "../../include/trading-db/parts/qdb/compact-dataset.hpp"
 #include <map>
 
 int main() {

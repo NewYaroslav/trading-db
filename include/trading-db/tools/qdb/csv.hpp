@@ -2,7 +2,7 @@
 #ifndef TRADING_DB_QDB_CSV_HPP_INCLUDED
 #define TRADING_DB_QDB_CSV_HPP_INCLUDED
 
-#include "qdb-common.hpp"
+#include "..\..\parts\qdb\data-classes.hpp"
 #include <vector>
 #include <cmath>
 #include <fstream>

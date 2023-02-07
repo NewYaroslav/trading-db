@@ -6,13 +6,15 @@
 #error "The project must be built for sqlite multithreading! Set the SQLITE_THREADSAFE=1"
 #endif
 
-#include "../config.hpp"
+#include "../../config.hpp"
 
-#include "../utility/sqlite-func.hpp"
-#include "../utility/async-tasks.hpp"
-#include "../utility/safe-queue.hpp"
-#include "../utility/print.hpp"
-#include "../utility/files.hpp"
+#include "../../utils/sqlite-func.hpp"
+#include "../../utils/async-tasks.hpp"
+#include "../../utils/safe-queue.hpp"
+#include "../../utils/print.hpp"
+#include "../../utils/files.hpp"
+
+#include "ztime.hpp"
 
 #include <mutex>
 #include <atomic>
@@ -70,15 +72,15 @@ namespace trading_db {
 		std::string database_name;
 		sqlite3 *sqlite_db = nullptr;
 		// команды для транзакций
-		utility::SqliteTransaction sqlite_transaction;
+		utils::SqliteTransaction sqlite_transaction;
 		// предкомпилированные команды
-		utility::SqliteStmt stmt_replace_candle;
-		utility::SqliteStmt stmt_replace_tick;
-		utility::SqliteStmt stmt_replace_meta_data;
+		utils::SqliteStmt stmt_replace_candle;
+		utils::SqliteStmt stmt_replace_tick;
+		utils::SqliteStmt stmt_replace_meta_data;
 		//
-		utility::SqliteStmt stmt_get_candle;
-		utility::SqliteStmt stmt_get_tick;
-		utility::SqliteStmt stmt_get_meta_data;
+		utils::SqliteStmt stmt_get_candle;
+		utils::SqliteStmt stmt_get_tick;
+		utils::SqliteStmt stmt_get_meta_data;
 
 		// флаг сброса
 		bool is_backup = ATOMIC_VAR_INIT(false);
@@ -103,7 +105,7 @@ namespace trading_db {
 				sqlite3 *&sqlite_db_ptr,
 				const std::string &db_name,
 				const bool readonly = false) noexcept {
-			utility::create_directory(db_name, true);
+			utils::create_directory(db_name, true);
 			// открываем и возможно еще создаем таблицу
 			int flags = readonly ?
 				(SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :
@@ -128,9 +130,9 @@ namespace trading_db {
 					"key				TEXT	PRIMARY KEY NOT NULL,"
 					"value				TEXT				NOT NULL)";
 
-				if (!utility::prepare(sqlite_db_ptr, create_candle_table_sql)) return false;
-				if (!utility::prepare(sqlite_db_ptr, create_tick_table_sql)) return false;
-				if (!utility::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
+				if (!utils::prepare(sqlite_db_ptr, create_candle_table_sql)) return false;
+				if (!utils::prepare(sqlite_db_ptr, create_tick_table_sql)) return false;
+				if (!utils::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
 			}
 			return true;
 		}
@@ -162,8 +164,8 @@ namespace trading_db {
 		bool replace_price_data(
 				const uint64_t key,
 				const std::vector<uint8_t> &buffer,
-				utility::SqliteTransaction &transaction,
-				utility::SqliteStmt &stmt) noexcept {
+				utils::SqliteTransaction &transaction,
+				utils::SqliteStmt &stmt) noexcept {
 
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -201,8 +203,8 @@ namespace trading_db {
 
 		bool replace_meta_data(
 				const MetaData &pair,
-				utility::SqliteTransaction &transaction,
-				utility::SqliteStmt &stmt) noexcept {
+				utils::SqliteTransaction &transaction,
+				utils::SqliteStmt &stmt) noexcept {
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
 			if (sqlite3_bind_text(stmt.get(), 1, pair.key.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK) {
@@ -235,8 +237,8 @@ namespace trading_db {
 
 		bool replace_price_data_map(
 				const std::map<uint64_t, std::vector<uint8_t>>	&buffer,
-				utility::SqliteTransaction						&transaction,
-				utility::SqliteStmt								&stmt) noexcept {
+				utils::SqliteTransaction						&transaction,
+				utils::SqliteStmt								&stmt) noexcept {
 			if (buffer.empty()) return true;
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -270,7 +272,7 @@ namespace trading_db {
 			return true;
 		}
 
-		inline std::vector<uint8_t> get_price_data(utility::SqliteStmt &stmt, const uint64_t key) noexcept {
+		inline std::vector<uint8_t> get_price_data(utils::SqliteStmt &stmt, const uint64_t key) noexcept {
 			std::vector<uint8_t> value;
 			int err = 0;
 			while (true) {
@@ -328,7 +330,7 @@ namespace trading_db {
 		}
 
 		inline MetaData get_meta_data(
-				utility::SqliteStmt &stmt,
+				utils::SqliteStmt &stmt,
 				const std::string &key) noexcept {
 
 			MetaData meta_data;
@@ -391,7 +393,7 @@ namespace trading_db {
 			return std::move(meta_data);
 		}
 
-		inline bool get_uint64_value(utility::SqliteStmt &stmt, uint64_t &value) noexcept {
+		inline bool get_uint64_value(utils::SqliteStmt &stmt, uint64_t &value) noexcept {
 			int err = 0;
 			while (true) {
 				if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
@@ -463,25 +465,25 @@ namespace trading_db {
 		}
 
 		inline bool get_min_max_date(const bool use_tick_data, uint64_t &t_min, uint64_t &t_max) {
-            utility::SqliteStmt stmt_min;
-            utility::SqliteStmt stmt_max;
-            if (use_tick_data) {
-                stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.tick_table + "'");
-                stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.tick_table + "'");
-                if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
-                    t_max += ztime::SECONDS_IN_HOUR;
-                    return true;
-                }
-            } else {
-                stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.candle_table + "'");
-                stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.candle_table + "'");
-                if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
-                    t_max += ztime::SECONDS_IN_DAY;
-                    return true;
-                }
-            }
-            t_min = t_max = 0;
-            return false;
+			utils::SqliteStmt stmt_min;
+			utils::SqliteStmt stmt_max;
+			if (use_tick_data) {
+				stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.tick_table + "'");
+				stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.tick_table + "'");
+				if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
+					t_max += ztime::SECONDS_IN_HOUR;
+					return true;
+				}
+			} else {
+				stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.candle_table + "'");
+				stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.candle_table + "'");
+				if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
+					t_max += ztime::SECONDS_IN_DAY;
+					return true;
+				}
+			}
+			t_min = t_max = 0;
+			return false;
 		}
 
 		inline bool read_candles(std::vector<uint8_t> &data, const uint64_t t) noexcept {
@@ -559,13 +561,13 @@ namespace trading_db {
 		inline bool remove_candles(const uint64_t t) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "' WHERE key == " + std::to_string(t));
+			return utils::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "' WHERE key == " + std::to_string(t));
 		}
 
 		inline bool remove_ticks(const uint64_t t) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "' WHERE key == " + std::to_string(t));
+			return utils::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "' WHERE key == " + std::to_string(t));
 		}
 
 		/** \brief Удалить все данные
@@ -574,9 +576,9 @@ namespace trading_db {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
 			return
-				utility::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "'") &&
-				utility::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "'") &&
-				utility::prepare(sqlite_db, "DELETE FROM '" + config.meta_data_table + "'");
+				utils::prepare(sqlite_db, "DELETE FROM '" + config.candle_table + "'") &&
+				utils::prepare(sqlite_db, "DELETE FROM '" + config.tick_table + "'") &&
+				utils::prepare(sqlite_db, "DELETE FROM '" + config.meta_data_table + "'");
 		}
 
 		inline std::string get_info_str(const METADATA_TYPE type) noexcept {

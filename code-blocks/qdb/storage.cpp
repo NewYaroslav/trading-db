@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../../include/trading-db/parts/qdb-storage.hpp"
+#include "../../include/trading-db/parts/qdb/storage.hpp"
 
 int main() {
 	std::cout << "start test storage db!" << std::endl;

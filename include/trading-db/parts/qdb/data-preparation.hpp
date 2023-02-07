@@ -2,10 +2,11 @@
 #ifndef TRADING_DB_QDB_DATA_PREPARATION_HPP_INCLUDED
 #define TRADING_DB_QDB_DATA_PREPARATION_HPP_INCLUDED
 
-#include "qdb-compact-dataset.hpp"
-#include "qdb-common.hpp"
-#include "qdb-dictionary-candles.hpp"
-#include "qdb-dictionary-ticks.hpp"
+#include "enums.hpp"
+#include "data-classes.hpp"
+#include "compact-dataset.hpp"
+#include "dictionary-candles.hpp"
+#include "dictionary-ticks.hpp"
 #include <map>
 #include <vector>
 #include "zdict.h"

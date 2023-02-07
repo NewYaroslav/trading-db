@@ -2,12 +2,13 @@
 #ifndef TRADING_DB_QDB_HISTORY_HPP_INCLUDED
 #define TRADING_DB_QDB_HISTORY_HPP_INCLUDED
 
-#include "../parts/qdb-common.hpp"
-#include "../qdb.hpp"
-#include "../utility/async-tasks.hpp"
+#include "../../parts/qdb/enums.hpp"
+#include "../../parts/qdb/data-classes.hpp"
+#include "../../qdb.hpp"
+#include "../../utils/async-tasks.hpp"
+#include "ztime.hpp"
 #include <vector>
 #include <set>
-#include "ztime.hpp"
 
 namespace trading_db {
 
@@ -141,7 +142,7 @@ namespace trading_db {
 		} internal_config;
 
 		std::vector<std::shared_ptr<QDB>>	symbols_db;
-		utility::AsyncTasks					async_tasks;
+		utils::AsyncTasks					async_tasks;
 
 		Config		config;
 		Config		local_config;

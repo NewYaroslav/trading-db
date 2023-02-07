@@ -7,7 +7,7 @@
 #include <queue>
 
 namespace trading_db {
-	namespace utility {
+	namespace utils {
 
 		template <class T>
 		class SafeQueue {

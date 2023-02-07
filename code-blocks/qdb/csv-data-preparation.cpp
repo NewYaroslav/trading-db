@@ -1,8 +1,8 @@
 #include <iostream>
-#include "../../include/trading-db/parts/qdb-csv.hpp"
-#include "../../include/trading-db/parts/qdb-writer-price-buffer.hpp"
-#include "../../include/trading-db/parts/qdb-zstd.hpp"
-#include "../../include/trading-db/parts/qdb-compact-dataset.hpp"
+#include "../../include/trading-db/tools/qdb/csv.hpp"
+#include "../../include/trading-db/parts/qdb/writer-price-buffer.hpp"
+#include "../../include/trading-db/parts/qdb/zstd.hpp"
+#include "../../include/trading-db/parts/qdb/compact-dataset.hpp"
 #include <map>
 
 inline double get_price(const uint64_t t) noexcept {
@@ -72,8 +72,8 @@ int main() {
                 auto &data = dataset.get_data();
 
                 const std::string part_file_name = path_traning_data + "//" + file_data.symbol + "//a" + std::to_string(training_file_counter) + ".dat";
-                trading_db::utility::create_directory(part_file_name, true);
-                trading_db::utility::write_file(part_file_name, data.data(), data.size());
+                trading_db::utils::create_directory(part_file_name, true);
+                trading_db::utils::write_file(part_file_name, data.data(), data.size());
             }
 
             // делаем равные bid и ask
@@ -90,8 +90,8 @@ int main() {
                 auto &data = dataset.get_data();
 
                 const std::string part_file_name = path_traning_data + "//" + file_data.symbol + "//b" + std::to_string(training_file_counter) + ".dat";
-                trading_db::utility::create_directory(part_file_name, true);
-                trading_db::utility::write_file(part_file_name, data.data(), data.size());
+                trading_db::utils::create_directory(part_file_name, true);
+                trading_db::utils::write_file(part_file_name, data.data(), data.size());
             }
             ++training_file_counter;
         };

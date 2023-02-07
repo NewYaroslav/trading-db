@@ -1,15 +1,14 @@
-#ifndef MEGA_CONNECTOR_FILES_HPP_INCLUDED
-#define MEGA_CONNECTOR_FILES_HPP_INCLUDED
+#pragma once
+#ifndef TRADING_DB_UTILS_FILES_HPP_INCLUDED
+#define TRADING_DB_UTILS_FILES_HPP_INCLUDED
 
 #include <fstream>
-//#include <stdlib.h>
 #include <dirent.h>
 #include <dir.h>
-//#include <conio.h>
 #include <vector>
 
 namespace trading_db {
-	namespace utility {
+	namespace utils {
 
 		/** \brief Load whole file into std :: string
 		 * \param file_name File name
@@ -200,7 +199,7 @@ namespace trading_db {
 			closedir(directory);
 			return num_files;
 		}
-	}; // utility
+	}; // utils
 }; // mega_connector
 
-#endif // MEGA_CONNECTOR_FILES_HPP_INCLUDED
+#endif // MEGA_CONNECTOR_UTILS_FILES_HPP_INCLUDED

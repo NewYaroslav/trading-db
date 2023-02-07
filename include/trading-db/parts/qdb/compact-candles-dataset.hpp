@@ -2,7 +2,8 @@
 #ifndef TRADING_DB_QDB_COMPACT_CANDLES_DATASET_HPP_INCLUDED
 #define TRADING_DB_QDB_COMPACT_CANDLES_DATASET_HPP_INCLUDED
 
-#include "qdb-common.hpp"
+#include "enums.hpp"
+#include "data-classes.hpp"
 #include <vector>
 #include <cmath>
 #include "ztime.hpp"

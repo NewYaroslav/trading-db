@@ -1,5 +1,5 @@
 #include <iostream>
-#include "trading-db/tools/qdb-history.hpp"
+#include "trading-db/tools/qdb/history.hpp"
 
 int main(int argc, char* argv[]) {
 	std::cout << "start" << std::endl;

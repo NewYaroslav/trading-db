@@ -1,6 +1,6 @@
 #pragma once
-#ifndef TRADING_DB_UTILITY_PRINT_HPP_INCLUDED
-#define TRADING_DB_UTILITY_PRINT_HPP_INCLUDED
+#ifndef TRADING_DB_UTILS_PRINT_HPP_INCLUDED
+#define TRADING_DB_UTILS_PRINT_HPP_INCLUDED
 
 #include <thread>
 #include <mutex>
@@ -11,7 +11,7 @@
 #endif
 
 namespace trading_db {
-	namespace utility {
+	namespace utils {
 
 		/** \brief Многопоточная версия вывода в консоль
 		 */
@@ -27,7 +27,7 @@ namespace trading_db {
 				std::cout << this->str();
 			}
 		};
-	}; // utility
+	}; // utils
 }; // trading_db
 
 #endif // TRADING_DB_UTILITY_PRINT_HPP_INCLUDED

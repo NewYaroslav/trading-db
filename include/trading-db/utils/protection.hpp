@@ -3,7 +3,7 @@
 #define TRADING_DB_PROTECTION_HPP_INCLUDED
 
 namespace trading_db {
-	namespace utility {
+	namespace utils {
 
 		/*
 		inline void create_protected(

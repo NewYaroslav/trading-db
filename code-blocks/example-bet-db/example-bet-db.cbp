@@ -26,13 +26,13 @@
 					<Add option="-DSQLITE_THREADSAFE=1" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
-					<Add directory="../../lib/xtime_cpp/src" />
+					<Add directory="../../lib/ztime-cpp/src" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
-					<Add directory="../../lib/xtime_cpp/src" />
+					<Add directory="../../lib/ztime-cpp/src" />
 				</Linker>
 			</Target>
 		</Build>
@@ -40,7 +40,10 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="../../include/trading-db/bet-database.hpp" />
+		<Unit filename="../../include/trading-db/bo-trades-db.hpp" />
+		<Unit filename="../../include/trading-db/parts/bo-trades-db/common.hpp" />
+		<Unit filename="../../include/trading-db/parts/bo-trades-db/meta-stats.hpp" />
+		<Unit filename="../../include/trading-db/parts/bo-trades-db/stats.hpp" />
 		<Unit filename="../../lib/sqlite-amalgamation-3340100/sqlite3.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -48,6 +51,11 @@
 		<Unit filename="../../lib/sqlite_orm/include/sqlite_orm/sqlite_orm.h" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.cpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/ztime.cpp" />
+		<Unit filename="../../lib/ztime-cpp/src/ztime.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/ztime_cpu_time.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/ztime_ntp.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/ztime_timer_event.hpp" />
 		<Unit filename="main.cpp" />
 		<Extensions>
 			<lib_finder disable_auto="1" />

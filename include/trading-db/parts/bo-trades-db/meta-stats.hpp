@@ -1,15 +1,15 @@
 #pragma once
-#ifndef TRADING_DB_BET_DATABASE_PARTS_META_BET_STATS_HPP_INCLUDED
-#define TRADING_DB_BET_DATABASE_PARTS_META_BET_STATS_HPP_INCLUDED
+#ifndef TRADING_DB_BO_TRADES_DB_PARTS_META_BET_STATS_HPP_INCLUDED
+#define TRADING_DB_BO_TRADES_DB_PARTS_META_BET_STATS_HPP_INCLUDED
 
-#include "bet-database-common.hpp"
-#include "bet-database-stats.hpp"
+#include "common.hpp"
+#include "stats.hpp"
 
 namespace trading_db {
-	namespace bet_database {
+	namespace bo_trades_db {
 		/** \brief Класс для получения сведений о данных массива сделок
 		 */
-		class BetMetaStats {
+		class MetaStats {
 		public:
 			std::vector<std::string>	brokers;
 			std::vector<std::string>	symbols;
@@ -18,11 +18,11 @@ namespace trading_db {
 			bool						real		= false;
 			bool						demo		= false;
 
-			std::vector<BetStats>		currency_stats;
-			std::vector<BetStats>		signals_stats;
-			std::vector<BetStats>		brokers_stats;
+			std::vector<Stats>		    currency_stats;
+			std::vector<Stats>		    signals_stats;
+			std::vector<Stats>		    brokers_stats;
 
-			BetMetaStats() {};
+			MetaStats() {};
 
 			template<class T>
 			void calc(const T &bets) noexcept {
@@ -67,8 +67,8 @@ namespace trading_db {
 					brokers_stats[b].calc(bets, 0);
 				}
 			}
-		}; // BetMetaStats
-	};
+		}; // MetaStats
+	}; // bo_trades_db
 };
 
-#endif // TRADING_DB_BET_DATABASE_PARTS_META_BET_STATS_HPP_INCLUDED
+#endif // TRADING_DB_BO_TRADES_DB_PARTS_META_BET_STATS_HPP_INCLUDED

@@ -1,18 +1,18 @@
 #pragma once
-#ifndef TRADING_DB_BET_DATABASE_PARTS_BET_STATS_HPP_INCLUDED
-#define TRADING_DB_BET_DATABASE_PARTS_BET_STATS_HPP_INCLUDED
+#ifndef TRADING_DB_BO_TRADES_DB_PARTS_BET_STATS_HPP_INCLUDED
+#define TRADING_DB_BO_TRADES_DB_PARTS_BET_STATS_HPP_INCLUDED
 
-#include "bet-database-common.hpp"
+#include "common.hpp"
 #include <ztime.hpp>
 #include <vector>
 #include <map>
 #include <set>
 
 namespace trading_db {
-	namespace bet_database {
+	namespace bo_trades_db {
 		/** \brief Статистика ставок
 		 */
-		class BetStats {
+		class Stats {
 		public:
 
 			class WinrateStats {
@@ -224,7 +224,7 @@ namespace trading_db {
 
 		public:
 
-			BetStats() {
+			Stats() {
 				clear();
 			}
 
@@ -606,7 +606,7 @@ namespace trading_db {
 					const size_t day_month = ztime::get_day_month(timestamp);
 					const size_t month = ztime::get_month(timestamp);
 
-					if (bet.status == BetStatus::WIN) {
+					if (bet.status == BoStatus::WIN) {
 						win(bet.symbol, bet.contract_type, timestamp);
 
 						stats_signal[bet.signal].win();
@@ -669,7 +669,7 @@ namespace trading_db {
 
 						aver_absolute_trade_size += bet.amount;
 					} else
-					if (bet.status == BetStatus::LOSS) {
+					if (bet.status == BoStatus::LOSS) {
 						loss(bet.symbol, bet.contract_type, timestamp);
 
 						stats_signal[bet.signal].loss();
@@ -731,7 +731,7 @@ namespace trading_db {
 
 						aver_absolute_trade_size += bet.amount;
 					} else
-					if (bet.status == BetStatus::STANDOFF) {
+					if (bet.status == BoStatus::STANDOFF) {
 						standoff(bet.symbol, bet.contract_type, timestamp);
 
 						stats_signal[bet.signal].standoff();
@@ -937,8 +937,8 @@ namespace trading_db {
 				} //<
 
 			}
-		}; // BetStats
-	};
+		}; // Stats
+	}; // bo_trades_db
 };
 
-#endif // TRADING_DB_BET_DATABASE_PARTS_BET_STATS_HPP_INCLUDED
+#endif // TRADING_DB_BO_TRADES_DB_PARTS_BET_STATS_HPP_INCLUDED

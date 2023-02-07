@@ -9,7 +9,7 @@
 #include <functional>
 
 namespace trading_db {
-	namespace utility {
+	namespace utils {
 
 		/** \brief Класс для предкомпиляции запроса SQL
 		 */

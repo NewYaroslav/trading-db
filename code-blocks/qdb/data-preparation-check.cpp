@@ -1,7 +1,7 @@
 #include <iostream>
-#include "trading-db/parts/qdb-csv.hpp"
-#include "trading-db/parts/qdb-writer-price-buffer.hpp"
-#include "trading-db/parts/qdb-data-preparation.hpp"
+#include "trading-db/tools/qdb/csv.hpp"
+#include "trading-db/parts/qdb/writer-price-buffer.hpp"
+#include "trading-db/parts/qdb/data-preparation.hpp"
 
 inline bool cmp_equal(const double x, const double y, const double eps) noexcept {
     return std::fabs(x - y) < eps;

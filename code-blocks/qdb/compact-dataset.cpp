@@ -1,7 +1,7 @@
 #include <iostream>
-#include "../../include/trading-db/parts/qdb-compact-candles-dataset.hpp"
-#include "../../include/trading-db/parts/qdb-compact-ticks-dataset.hpp"
-#include "../../include/trading-db/parts/qdb-compact-dataset.hpp"
+#include "../../include/trading-db/parts/qdb/compact-candles-dataset.hpp"
+#include "../../include/trading-db/parts/qdb/compact-ticks-dataset.hpp"
+#include "../../include/trading-db/parts/qdb/compact-dataset.hpp"
 #include <map>
 
 inline double get_price(const uint64_t t) noexcept {

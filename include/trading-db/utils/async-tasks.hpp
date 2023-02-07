@@ -9,7 +9,7 @@
 #include <deque>
 
 namespace trading_db {
-	namespace utility {
+	namespace utils {
 
 		/** \brief Класс для выполнений асинхронных задач
 		 */
@@ -143,7 +143,7 @@ namespace trading_db {
 			} // ~AsyncTasks()
 
 		}; // AsyncTasks
-	}; // utility
+	}; // utils
 }; // trading_db
 
 #endif // TRADING_DB_ASYNC_TASKS_HPP_INCLUDED

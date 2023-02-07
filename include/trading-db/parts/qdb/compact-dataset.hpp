@@ -1,15 +1,16 @@
 #pragma once
-#ifndef TRADING_DB_QDB_COMPACT_TICKS_DATASET_HPP_INCLUDED
-#define TRADING_DB_QDB_COMPACT_TICKS_DATASET_HPP_INCLUDED
+#ifndef TRADING_DB_QDB_COMPACT_DATASET_HPP_INCLUDED
+#define TRADING_DB_QDB_COMPACT_DATASET_HPP_INCLUDED
 
-#include "qdb-common.hpp"
+#include "enums.hpp"
+#include "data-classes.hpp"
 #include <vector>
 #include <cmath>
 #include "ztime.hpp"
 
 namespace trading_db {
 
-	class QdbCompactTickDataset {
+	class QdbCompactDataset {
 	private:
 		// reg_a - множитель цены и объема (8 бит)
 		//
@@ -231,18 +232,210 @@ namespace trading_db {
 
 	public:
 
-		QdbCompactTickDataset() {};
+		QdbCompactDataset() {};
 
 		inline std::vector<uint8_t> &get_data() noexcept {
 			return data;
 		}
+
+		/** \brief Записать последовательность цен
+		 *
+		 * \warning Последовательность цен должна содержать 1440 минутных баров
+		 * \param candles		Последовательность цен
+		 * \param price_scale	Множитель для цены (количество знаков послезапятой)
+		 * \param volume_scale	Множитель для объема (количество знаков послезапятой)
+		 */
+		template<class T>
+		inline void write_candles(
+				const T &candles,
+				const size_t price_scale,
+				const size_t volume_scale) noexcept {
+			if (candles.empty()) return;
+			auto it_begin = candles.begin();
+
+			const double sh = it_begin->high;
+			const double sl = it_begin->low;
+			const double sc = it_begin->close;
+			const double sv = it_begin->volume;
+			//const uint64_t st = it_begin->timestamp;
+
+			double max_diff_price = std::max(std::abs(sh - sc), std::abs(sl - sc));
+			double max_diff_volume = 0;
+			double last_price = sc, last_volume = sv;
+			for (const auto &c : candles) {
+				// обновляем значение максимальной разницы цены
+				max_diff_price = std::max(max_diff_price, std::max(std::abs(c.high - last_price), std::abs(c.low - last_price)));
+				last_price = c.close;
+
+				// обновляем значение максимальной разницы объема
+				const double diff_volume = std::abs(c.volume - last_volume);
+				max_diff_volume = std::max(max_diff_volume, diff_volume);
+				last_volume = c.volume;
+			}
+
+			// находим множитель цены и объема
+			const uint64_t price_factor = (uint64_t)(std::pow(10, price_scale) + 0.5d);
+			const uint64_t volume_factor = (uint64_t)(std::pow(10, volume_scale) + 0.5d);
+
+			// находим начальную амплитуду
+			const uint64_t start_amplitude_price = (uint64_t)((sc * (double)price_factor) + 0.5d);
+			const uint64_t start_amplitude_volume = (uint64_t)((sv * (double)volume_factor) + 0.5d);
+
+			// максимальная разница цены и объема
+			const uint64_t max_diff_amplitude_price = (uint64_t)((max_diff_price * (double)price_factor) + 0.5d);
+			const uint64_t max_diff_amplitude_volume = (uint64_t)((max_diff_volume * (double)volume_factor) + 0.5d);
+
+			const uint8_t reg_a0 = (uint8_t)(price_scale & 0x0F);
+			const uint8_t reg_a1 = (uint8_t)(volume_scale & 0x0F);
+			const uint8_t reg_a = reg_a0 | (reg_a1 << 4);
+
+			// определяем тип переменной
+			const uint8_t reg_b0 = calc_uint_type(start_amplitude_price);
+			const uint8_t reg_b1 = calc_int_type(max_diff_amplitude_price);
+			const uint8_t reg_b2 = calc_uint_type(start_amplitude_volume);
+			const uint8_t reg_b3 = calc_int_type(max_diff_amplitude_volume);
+			const uint8_t reg_b = (reg_b3 << 6) | (reg_b2 << 4) | (reg_b1 << 2) | (reg_b0 & 0x03);
+
+			// определяем длину массива в зависимости от наличия метки времени
+			const size_t length = 2 +
+				conv_int_type_to_bytes(reg_b0) + conv_int_type_to_bytes(reg_b2) +
+				4 * conv_int_type_to_bytes(reg_b1) * ztime::MINUTES_IN_DAY +
+				conv_int_type_to_bytes(reg_b3) * ztime::MINUTES_IN_DAY;
+
+			data.resize(length);
+
+			// записываем регистры
+			data[0] = reg_a;
+			data[1] = reg_b;
+
+			uint8_t* p = data.data();
+			size_t offset_ptr = 2;
+
+			// записываем начальную цену
+			offset_ptr = set_u64_value(start_amplitude_price, reg_b0, p, offset_ptr);
+			// записываем начальный объем
+			offset_ptr = set_u64_value(start_amplitude_volume, reg_b2, p, offset_ptr);
+			const size_t sample_size = 4 * conv_int_type_to_bytes(reg_b1) + conv_int_type_to_bytes(reg_b3);
+
+			// инициализируем отсутствие данных для всех баров
+			for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+				size_t sample_offset_ptr = offset_ptr + i * sample_size;
+				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
+									set_no_value(reg_b3, p, sample_offset_ptr);
+			}
+
+			// записываем те бары, что есть в наличии
+			uint64_t last_cc = start_amplitude_price;
+			uint64_t last_cv = start_amplitude_volume;
+			for (auto &c : candles) {
+				if (c.empty()) continue;
+				const int64_t co = (int64_t)((c.open * (double)price_factor) + 0.5d);
+				const int64_t ch = (int64_t)((c.high * (double)price_factor) + 0.5d);
+				const int64_t cl = (int64_t)((c.low * (double)price_factor) + 0.5d);
+				const int64_t cc = (int64_t)((c.close * (double)price_factor) + 0.5d);
+				const int64_t cv = (int64_t)((c.volume * (double)volume_factor) + 0.5d);
+
+				const int64_t cdo = co - (int64_t)last_cc;
+				const int64_t cdh = ch - (int64_t)last_cc;
+				const int64_t cdl = cl - (int64_t)last_cc;
+				const int64_t cdc = cc - (int64_t)last_cc;
+				const int64_t cdv = cv - (int64_t)last_cv;
+
+				size_t sample_offset_ptr = offset_ptr + sample_size * ztime::get_minute_day(c.timestamp);
+				sample_offset_ptr = set_s64_value(cdo, reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = set_s64_value(cdh, reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = set_s64_value(cdl, reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = set_s64_value(cdc, reg_b1, p, sample_offset_ptr);
+									set_s64_value(cdv, reg_b3, p, sample_offset_ptr);
+				last_cc = cc;
+				last_cv = cv;
+			}
+		} // write_candles
+
+		template<class T>
+		inline void read_candles(
+				T &candles,
+				size_t &price_scale,
+				size_t &volume_scale,
+				const uint64_t timestamp_day = 0,
+				const bool is_fill = false) {
+			if (data.empty()) {
+				price_scale = 0;
+				volume_scale = 0;
+				return;
+			}
+
+			// получаем точность котировок и объема
+			price_scale = data[0] & 0x0F;			// reg_a 0-3
+			volume_scale = (data[0] >> 4) & 0x0F;	// reg_a 4-7
+
+			// получаем множитель для котировок иобъема
+			const uint64_t price_factor = (uint64_t)(std::pow(10, price_scale) + 0.5d);
+			const uint64_t volume_factor = (uint64_t)(std::pow(10, volume_scale) + 0.5d);
+
+			// получаем количество байт для хранения данных
+			const uint8_t reg_b0 = data[1] & 0x03;
+			const uint8_t reg_b1 = (data[1] >> 2) & 0x03;
+			const uint8_t reg_b2 = (data[1] >> 4) & 0x03;
+			const uint8_t reg_b3 = (data[1] >> 6) & 0x03;
+
+			const uint64_t start_timestamp = timestamp_day;
+
+			const uint8_t* p = data.data();
+			size_t offset_ptr = 2;
+
+			const size_t sample_size = 4 * conv_int_type_to_bytes(reg_b1) + conv_int_type_to_bytes(reg_b3);
+
+			// получаем стартовую цену и объем
+			uint64_t start_price = 0, start_volume = 0;
+			offset_ptr = get_u64_value(start_price, reg_b0, p, offset_ptr);
+			offset_ptr = get_u64_value(start_volume, reg_b2, p, offset_ptr);
+			uint64_t last_price = start_price, last_volume = start_volume;
+
+			for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+				const uint64_t timestamp = i * ztime::SECONDS_IN_MINUTE + start_timestamp;
+				size_t sample_offset_ptr = offset_ptr + i * sample_size;
+				bool status = false;
+				check_no_value(status, reg_b1, p, sample_offset_ptr);
+				if (!status) {
+					if (is_fill) {
+						// OHLCV
+						candles[i] = Candle(0,0,0,0,0,timestamp);
+					}
+					continue;
+				}
+				int64_t cdo = 0, cdh = 0, cdl = 0, cdc = 0, cdv = 0;
+				sample_offset_ptr = get_s64_value(cdo, reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = get_s64_value(cdh, reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = get_s64_value(cdl, reg_b1, p, sample_offset_ptr);
+				sample_offset_ptr = get_s64_value(cdc, reg_b1, p, sample_offset_ptr);
+									get_s64_value(cdv, reg_b3, p, sample_offset_ptr);
+				const int64_t co = last_price + cdo;
+				const int64_t ch = last_price + cdh;
+				const int64_t cl = last_price + cdl;
+				const int64_t cc = last_price + cdc;
+				const int64_t cv = last_volume + cdv;
+				last_price = cc;
+				last_volume = cv;
+
+				const double fco = (double)co / (double)price_factor;
+				const double fch = (double)ch / (double)price_factor;
+				const double fcl = (double)cl / (double)price_factor;
+				const double fcc = (double)cc / (double)price_factor;
+				const double fcv = (double)cv / (double)volume_factor;
+				candles[i] = Candle(fco,fch,fcl,fcc,fcv,timestamp);
+			}
+		} // read_candles
 
 		/** \brief Записать последовательность тиков
 		 * \param ticks			Последовательность цен
 		 * \param price_scale	Множитель для цены (количество знаков послезапятой)
 		 */
 		template<class T>
-		inline void write_sequence(
+		inline void write_ticks(
 				const T &ticks,
 				const size_t price_scale,
 				const uint64_t timestamp_ms) noexcept {
@@ -252,25 +445,25 @@ namespace trading_db {
 
 			double max_diff_price = 0;
 			int64_t max_diff_time = 0;
-			double last_price = it_begin->bid;
-			//int64_t last_time = it_begin->timestamp_ms;
+			double last_price = it_begin->second.bid;
 			int64_t last_time = timestamp_ms;
+
 			for (const auto &tick : ticks) {
 				// обновляем значение максимальной разницы цены
-				max_diff_price = std::max(max_diff_price, std::max(std::abs(tick.bid - last_price), std::abs(tick.ask - last_price)));
-				last_price = tick.bid;
+				max_diff_price = std::max(max_diff_price, std::max(std::abs(tick.second.bid - last_price), std::abs(tick.second.ask - last_price)));
+				last_price = tick.second.bid;
 
 				// обновляем значение максимальной разницы времени
-				const int64_t diff_time = std::abs((int64_t)tick.timestamp_ms - last_time);
+				const int64_t diff_time = std::abs((int64_t)tick.first - last_time);
 				max_diff_time = std::max(max_diff_time, diff_time);
-				last_time = tick.timestamp_ms;
+				last_time = tick.first;
 			}
 
 			// находим множитель цены
 			const uint64_t price_factor = (uint64_t)(std::pow(10, price_scale) + 0.5d);
 
 			// находим начальную амплитуду и начальное время
-			const uint64_t start_amplitude_price = (uint64_t)((it_begin->bid * (double)price_factor) + 0.5d);
+			const uint64_t start_amplitude_price = (uint64_t)((it_begin->second.bid * (double)price_factor) + 0.5d);
 			//const uint64_t start_time = it_begin->timestamp_ms;
 			const uint64_t start_time = timestamp_ms;
 
@@ -323,9 +516,9 @@ namespace trading_db {
 			uint64_t last_t = start_time;
 			size_t tick_counter = 0;
 			for (auto &tick : ticks) {
-				const int64_t bid = (int64_t)((tick.bid * (double)price_factor) + 0.5d);
-				const int64_t ask = (int64_t)((tick.ask * (double)price_factor) + 0.5d);
-				const int64_t t = (int64_t)(tick.timestamp_ms);
+				const int64_t bid = (int64_t)((tick.second.bid * (double)price_factor) + 0.5d);
+				const int64_t ask = (int64_t)((tick.second.ask * (double)price_factor) + 0.5d);
+				const int64_t t = (int64_t)(tick.first);
 
 				const int64_t db = bid - (int64_t)last_p;
 				const int64_t da = ask - (int64_t)last_p;
@@ -339,10 +532,10 @@ namespace trading_db {
 				last_p = bid;
 				last_t = t;
 			}
-		} // write_sequence
+		} // write_ticks
 
 		template<class T>
-		inline void read_sequence(
+		inline void read_ticks(
 				T				&ticks,
 				size_t			&price_scale,
 				const uint64_t	timestamp_ms) {
@@ -394,11 +587,11 @@ namespace trading_db {
 
 				const double bid = (double)b / (double)price_factor;
 				const double ask = (double)a / (double)price_factor;
-				ticks.emplace_back(bid, ask, t);
+				ticks[t] = ShortTick(bid, ask);
 			};
-		} // read_sequence
+		} // read_ticks
 	};
 
 };
 
-#endif // TRADING_DB_QDB_COMPACT_TICKS_DATASET_HPP_INCLUDED
+#endif // TRADING_DB_QDB_COMPACT_DATASET_HPP_INCLUDED

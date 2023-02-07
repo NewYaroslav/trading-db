@@ -8,19 +8,19 @@
 
 #include "config.hpp"
 
-#include "parts/qdb-common.hpp"
-#include "parts/qdb-data-preparation.hpp"
-#include "parts/qdb-price-buffer.hpp"
-#include "parts/qdb-writer-price-buffer.hpp"
-#include "parts/qdb-storage.hpp"
-#include "parts/qdb-csv.hpp"
-//#include "parts/qdb-history.hpp"
+#include "parts/qdb/enums.hpp"
+#include "parts/qdb/data-classes.hpp"
+#include "parts/qdb/data-preparation.hpp"
+#include "parts/qdb/price-buffer.hpp"
+#include "parts/qdb/writer-price-buffer.hpp"
+#include "parts/qdb/storage.hpp"
+#include "tools/qdb/csv.hpp"
 
-#include "utility/sqlite-func.hpp"
-#include "utility/async-tasks.hpp"
-#include "utility/safe-queue.hpp"
-#include "utility/print.hpp"
-#include "utility/files.hpp"
+#include "utils/sqlite-func.hpp"
+#include "utils/async-tasks.hpp"
+#include "utils/safe-queue.hpp"
+#include "utils/print.hpp"
+#include "utils/files.hpp"
 
 #include <ztime.hpp>
 #include <mutex>

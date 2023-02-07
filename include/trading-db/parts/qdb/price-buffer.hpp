@@ -2,12 +2,13 @@
 #ifndef TRADING_DB_QDB_PRICE_BUFFER_HPP_INCLUDED
 #define TRADING_DB_QDB_PRICE_BUFFER_HPP_INCLUDED
 
+#include "enums.hpp"
+#include "data-classes.hpp"
 #include <functional>
 #include <map>
 #include <array>
 #include <vector>
 #include "ztime.hpp"
-#include "qdb-common.hpp"
 
 namespace trading_db {
 
@@ -22,12 +23,12 @@ namespace trading_db {
 
 		class Config {
 		public:
-			int64_t tick_start	   = ztime::SECONDS_IN_DAY;		   /**< Количество секунд данных для загрузки в буфер до метки времени */
-			int64_t tick_stop	   = ztime::SECONDS_IN_DAY;		   /**< Количество секунд данных для загрузки в буфер после метки времени */
-			int64_t tick_deadtime  = ztime::SECONDS_IN_MINUTE;	   /**< Максимальное время отсутствия тиков */
-			int64_t candle_start   = 10 * ztime::SECONDS_IN_DAY;
-			int64_t candle_stop	   = 10 * ztime::SECONDS_IN_DAY;
-			int64_t candle_deadtime	   = ztime::SECONDS_IN_MINUTE; /**< Максимальное время отсутствия баров */
+			uint64_t tick_start	   = ztime::SECONDS_IN_DAY;		   /**< Количество секунд данных для загрузки в буфер до метки времени */
+			uint64_t tick_stop	   = ztime::SECONDS_IN_DAY;		   /**< Количество секунд данных для загрузки в буфер после метки времени */
+			uint64_t tick_deadtime	= ztime::SECONDS_IN_MINUTE;	   /**< Максимальное время отсутствия тиков */
+			uint64_t candle_start	= 10 * ztime::SECONDS_IN_DAY;
+			uint64_t candle_stop	   = 10 * ztime::SECONDS_IN_DAY;
+			uint64_t candle_deadtime	   = ztime::SECONDS_IN_MINUTE;	/**< Максимальное время отсутствия баров */
 			bool	candle_use_tick	   = true;
 			QDB_PRICE_MODE candles_price_mode = QDB_PRICE_MODE::BID_PRICE;
 		} config;
@@ -82,25 +83,25 @@ namespace trading_db {
 			bool has_last_tick = false;
 			uint64_t rd_time = start_time;
 			while(!false) {
-                if (tick_buffer.find(rd_time) == tick_buffer.end()) {
-                    auto data = on_read_ticks(rd_time);
-                    tick_buffer[rd_time] = data;
-                    if (!has_last_tick && !data.empty()) {
-                        if (std::prev(data.end())->first > t_ms) {
-                            has_last_tick = true;
-                        }
-                    }
-                }
-                rd_time += ztime::SECONDS_IN_HOUR;
-                if (rd_time > stop_time && has_last_tick) break;
-                if (rd_time > t_max) break;
+				if (tick_buffer.find(rd_time) == tick_buffer.end()) {
+					auto data = on_read_ticks(rd_time);
+					tick_buffer[rd_time] = data;
+					if (!has_last_tick && !data.empty()) {
+						if (std::prev(data.end())->first > t_ms) {
+							has_last_tick = true;
+						}
+					}
+				}
+				rd_time += ztime::SECONDS_IN_HOUR;
+				if (rd_time > stop_time && has_last_tick) break;
+				if (rd_time > t_max) break;
 			}
 		}
 
 		// очищаем тиковый буфре
 		void erase_tick_buffer(const uint64_t t_ms) noexcept {
 			const uint64_t t = t_ms/(uint64_t)ztime::MILLISECONDS_IN_SECOND;
-			const uint64_t start_time =  t <= config.tick_start ? 0 : ztime::get_first_timestamp_hour(t - config.tick_start);
+			const uint64_t start_time =	 t <= config.tick_start ? 0 : ztime::get_first_timestamp_hour(t - config.tick_start);
 			const uint64_t stop_time = ztime::get_first_timestamp_hour(t + config.tick_stop);
 			auto it = tick_buffer.begin();
 			while (it != tick_buffer.end()) {
@@ -150,7 +151,7 @@ namespace trading_db {
 
 				// проверяем мертвое время
 				const int64_t deadtime = ((int64_t)t_ms - (int64_t)it_last->first)/(int64_t)ztime::MILLISECONDS_IN_SECOND;
-				if (deadtime > config.tick_deadtime) return false;
+				if (deadtime > (int64_t)config.tick_deadtime) return false;
 
 				tick.ask = it_last->second.ask;
 				tick.bid = it_last->second.bid;
@@ -159,7 +160,7 @@ namespace trading_db {
 
 				// проверяем мертвое время
 				const int64_t deadtime = ((int64_t)t_ms - (int64_t)it_tick->first)/(int64_t)ztime::MILLISECONDS_IN_SECOND;
-				if (deadtime > config.tick_deadtime) return false;
+				if (deadtime > (int64_t)config.tick_deadtime) return false;
 
 				tick.ask = it_tick->second.ask;
 				tick.bid = it_tick->second.bid;
@@ -472,7 +473,7 @@ namespace trading_db {
 				}
 				if (config.candle_deadtime) {
 					const int64_t deadtime = ((int64_t)time_stop_ms - (int64_t)ticks.back().timestamp_ms) / (int64_t)ztime::MILLISECONDS_IN_SECOND;
-					if (deadtime > config.candle_deadtime) return false;
+					if (deadtime > (int64_t)config.candle_deadtime) return false;
 				}
 
 				for (auto tick : ticks) {
@@ -542,8 +543,8 @@ namespace trading_db {
 
 		bool get_tick_ms(Tick &tick, const uint64_t t_ms) noexcept {
 			if (!get_tick_buffer(tick, t_ms)) {
-                erase_tick_buffer(t_ms);
-                read_tick_buffer(t_ms);
+				erase_tick_buffer(t_ms);
+				read_tick_buffer(t_ms);
 				return get_tick_buffer(tick, t_ms);
 			}
 			return true;
@@ -551,9 +552,9 @@ namespace trading_db {
 
 		bool get_next_tick_ms(Tick &tick, const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
 			if (!get_next_tick_buffer(tick, t_ms)) {
-                erase_tick_buffer(t_ms);
-                read_next_tick_buffer(t_ms, t_ms_max);
-                return get_next_tick_buffer(tick, t_ms);
+				erase_tick_buffer(t_ms);
+				read_next_tick_buffer(t_ms, t_ms_max);
+				return get_next_tick_buffer(tick, t_ms);
 			}
 			return true;
 		}
