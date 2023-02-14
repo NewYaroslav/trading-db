@@ -84,7 +84,7 @@ namespace trading_db {
             return true;
 		}
 
-		bool read_candles(const uint64_t t, std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> &candles) {
+		bool read_candles(const uint64_t t, std::array<trading_db::Candle, ztime::MIN_PER_DAY> &candles) {
             std::vector<uint8_t> data;
             if (!storage.read_candles(data, t)) {
                 print_error("error read candles", __LINE__);
@@ -111,7 +111,7 @@ namespace trading_db {
 		}
 
 		bool compress_candles(
-                const std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> &candles,
+                const std::array<trading_db::Candle, ztime::MIN_PER_DAY> &candles,
                 std::vector<uint8_t> &data) {
             data_preparation.config.price_scale = config.digits;
             if (!data_preparation.compress_candles(candles, data)) {
@@ -127,7 +127,7 @@ namespace trading_db {
             writer_buffer.on_ticks = [&](
                     const std::map<uint64_t, trading_db::ShortTick> &ticks,
                     const uint64_t t) {
-                const uint64_t start_time = ztime::get_first_timestamp_hour(t);
+                const uint64_t start_time = ztime::start_of_hour(t);
                 std::map<uint64_t, ShortTick> new_ticks(ticks);
                 if (config.use_data_merge) {
                     std::map<uint64_t, ShortTick> prev_ticks;
@@ -142,14 +142,14 @@ namespace trading_db {
             };
 
             writer_buffer.on_candles = [&](
-                    const std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> &candles,
+                    const std::array<trading_db::Candle, ztime::MIN_PER_DAY> &candles,
                     const uint64_t t) {
-                const uint64_t start_time = ztime::get_first_timestamp_day(t);
-                std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> new_candles(candles);
+                const uint64_t start_time = ztime::start_of_day(t);
+                std::array<trading_db::Candle, ztime::MIN_PER_DAY> new_candles(candles);
                 if (config.use_data_merge) {
-                    std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> prev_candles;
+                    std::array<trading_db::Candle, ztime::MIN_PER_DAY> prev_candles;
                     if (read_candles(start_time, prev_candles)) {
-                        for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+                        for (size_t i = 0; i < ztime::MIN_PER_DAY; ++i) {
                             if (!new_candles[i].empty()) prev_candles[i] = new_candles[i];
                         }
                         new_candles = prev_candles;
@@ -171,8 +171,8 @@ namespace trading_db {
                 return temp;
             };
 
-            price_buffer.on_read_candles = [&](const uint64_t t) -> std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> {
-                std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> temp;
+            price_buffer.on_read_candles = [&](const uint64_t t) -> std::array<trading_db::Candle, ztime::MIN_PER_DAY> {
+                std::array<trading_db::Candle, ztime::MIN_PER_DAY> temp;
                 if (!read_candles(t, temp)) {
                     print_error("error read candles [price_buffer]", __LINE__);
                 }
@@ -234,11 +234,11 @@ namespace trading_db {
         }
 
         inline bool remove_candles(const uint64_t t) noexcept {
-            return storage.remove_candles(ztime::get_first_timestamp_day(t));
+            return storage.remove_candles(ztime::start_of_day(t));
         }
 
         inline bool remove_ticks(const uint64_t t) noexcept {
-            return storage.remove_ticks(ztime::get_first_timestamp_hour(t));
+            return storage.remove_ticks(ztime::start_of_hour(t));
         }
 
         inline bool remove_all() noexcept {

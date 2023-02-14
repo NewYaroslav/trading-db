@@ -7,10 +7,10 @@
 #endif
 
 #include "config.hpp"
-#include "utility/sqlite-func.hpp"
-#include "utility/async-tasks.hpp"
-#include "utility/print.hpp"
-#include "utility/files.hpp"
+#include "utils/sqlite-func.hpp"
+#include "utils/async-tasks.hpp"
+#include "utils/print.hpp"
+#include "utils/files.hpp"
 #include <mutex>
 #include <atomic>
 #include <future>
@@ -51,11 +51,11 @@ namespace trading_db {
 		std::string database_name;
 		sqlite3 *sqlite_db = nullptr;
 		// команды для транзакций
-		utility::SqliteTransaction sqlite_transaction;
+		utils::SqliteTransaction sqlite_transaction;
 		// предкомпилированные команды
-		utility::SqliteStmt stmt_replace_key_value;
-		utility::SqliteStmt stmt_get_key_value;
-		utility::SqliteStmt stmt_get_all_key_value;
+		utils::SqliteStmt stmt_replace_key_value;
+		utils::SqliteStmt stmt_get_key_value;
+		utils::SqliteStmt stmt_get_all_key_value;
 		// флаг сброса
 		bool is_backup = ATOMIC_VAR_INIT(false);
 		std::mutex backup_mutex;
@@ -64,7 +64,7 @@ namespace trading_db {
 
 		std::mutex method_mutex;
 
-		utility::AsyncTasks async_tasks;
+		utils::AsyncTasks async_tasks;
 
 		inline void print_error(
 				const std::string message,
@@ -81,7 +81,7 @@ namespace trading_db {
 				sqlite3 *&sqlite_db_ptr,
 				const std::string &db_name,
 				const bool readonly = false) noexcept {
-			utility::create_directory(db_name, true);
+			utils::create_directory(db_name, true);
 			// открываем и возможно еще создаем таблицу
 			int flags = readonly ?
 				(SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :
@@ -100,8 +100,8 @@ namespace trading_db {
 					"key				INTEGER PRIMARY KEY NOT NULL,"
 					"value				BLOB				NOT NULL)";
 
-				if (!utility::prepare(sqlite_db_ptr, create_key_value_table_sql)) {
-					print_error("utility::prepare return false", __LINE__);
+				if (!utils::prepare(sqlite_db_ptr, create_key_value_table_sql)) {
+					print_error("utils::prepare return false", __LINE__);
 					return false;
 				}
 			}
@@ -129,7 +129,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		bool replace(T &pair, utility::SqliteTransaction &transaction, utility::SqliteStmt &stmt) noexcept {
+		bool replace(T &pair, utils::SqliteTransaction &transaction, utils::SqliteStmt &stmt) noexcept {
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
 			if (sqlite3_bind_int64(stmt.get(), 1, pair.key) != SQLITE_OK) {
@@ -163,8 +163,8 @@ namespace trading_db {
 
 		bool replace_map(
 				const std::map<int64_t, BTYPE> &buffer,
-				utility::SqliteTransaction &transaction,
-				utility::SqliteStmt &stmt) noexcept {
+				utils::SqliteTransaction &transaction,
+				utils::SqliteStmt &stmt) noexcept {
 			if (buffer.empty()) return true;
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -199,7 +199,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		inline T get_value_from_db(utility::SqliteStmt &stmt, const int64_t key) noexcept {
+		inline T get_value_from_db(utils::SqliteStmt &stmt, const int64_t key) noexcept {
 			T value;
 			int err = 0;
 			while (true) {
@@ -257,7 +257,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		inline T get_values_from_db(utility::SqliteStmt &stmt) {
+		inline T get_values_from_db(utils::SqliteStmt &stmt) {
 			T buffer;
 			int err = 0;
 			while (true) {
@@ -315,7 +315,7 @@ namespace trading_db {
 			return std::move(buffer);
 		}
 
-		inline std::map<int64_t, BTYPE> get_map_pairs_from_db(utility::SqliteStmt &stmt) {
+		inline std::map<int64_t, BTYPE> get_map_pairs_from_db(utils::SqliteStmt &stmt) {
 			std::map<int64_t, BTYPE> buffer;
 			int err = 0;
 			while (true) {
@@ -424,7 +424,7 @@ namespace trading_db {
 				is_backup = true;
 			}
 			async_tasks.create_task([&, path]() {
-				if (!utility::backup_form_db(path, this->sqlite_db)) {
+				if (!utils::backup_form_db(path, this->sqlite_db)) {
 					callback(path, true);
 					print_error("backup return false", __LINE__);
 				} else {
@@ -532,7 +532,7 @@ namespace trading_db {
 		inline bool remove_all() noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM '" + config.table + "'");
+			return utils::prepare(sqlite_db, "DELETE FROM '" + config.table + "'");
 		}
 
 		/** \brief Удалить значение по ключу
@@ -541,7 +541,7 @@ namespace trading_db {
 		inline bool remove_value(const int64_t key) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM '" + config.table + "' WHERE key == " + std::to_string(key));
+			return utils::prepare(sqlite_db, "DELETE FROM '" + config.table + "' WHERE key == " + std::to_string(key));
 		}
 
 		/** \brief Удалить пару "ключ-значение"
@@ -550,7 +550,7 @@ namespace trading_db {
 		inline bool remove_pair(const KeyValue& pair) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM '" + config.table + "' WHERE key == " + std::to_string(pair.key));
+			return utils::prepare(sqlite_db, "DELETE FROM '" + config.table + "' WHERE key == " + std::to_string(pair.key));
 		}
 
 		/** \brief Удалить значения по ключам
@@ -567,7 +567,7 @@ namespace trading_db {
 				message += std::to_string(*it);
 			}
 			message += ")";
-			return utility::prepare(sqlite_db, message);
+			return utils::prepare(sqlite_db, message);
 		}
 
 		/** \brief Удалить пары "ключ-значение" по ключам
@@ -584,7 +584,7 @@ namespace trading_db {
 				message += std::to_string(it->key);
 			}
 			message += ")";
-			return utility::prepare(sqlite_db, message);
+			return utils::prepare(sqlite_db, message);
 		}
 	};
 

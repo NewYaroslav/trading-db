@@ -534,8 +534,8 @@ namespace trading_db {
 					// вычисляем время ожидания записи
 					const size_t delay_ms =
 						std::min(
-							(size_t)(config.idle_time * ztime::MILLISECONDS_IN_SECOND),
-							(size_t)(config.meta_data_time * ztime::MILLISECONDS_IN_SECOND)
+							(size_t)(ztime::sec_to_ms(config.idle_time)),
+							(size_t)(ztime::sec_to_ms(config.meta_data_time))
 						);
 					bet_safe_queue.update(
 							delay_ms,
@@ -589,7 +589,7 @@ namespace trading_db {
 							},
 							[&]() {
 								// вышло время ожидания
-								if (timer_meta_data.get_elapsed() >= config.meta_data_time) {
+								if (timer_meta_data.elapsed() >= config.meta_data_time) {
 									timer_meta_data.reset();
 									// читаем мета-данные
 									const std::string value = get_meta_data_db(stmt_get_meta_data, config.key_update_date).value;
@@ -599,7 +599,7 @@ namespace trading_db {
 										last_update_date = ztime::get_timestamp();
 									};
 								}
-								if (!buffer.empty() && timer.get_elapsed() >= config.idle_time) {
+								if (!buffer.empty() && timer.elapsed() >= config.idle_time) {
 									timer.reset();
 									// запишем данные
 									replace_db(buffer, sqlite_transaction, stmt_replace_bet);
@@ -908,7 +908,7 @@ namespace trading_db {
 			size_t index = 0;
 			while (index < buffer.size()) {
 				// получаем метку времени
-				const uint64_t timestamp = buffer[index].open_date / ztime::MILLISECONDS_IN_SECOND;
+				const uint64_t timestamp = ztime::ms_to_sec(buffer[index].open_date);
 				const uint32_t hour = ztime::get_hour_day(timestamp);
 				const uint32_t weekday = ztime::get_weekday(timestamp);
 

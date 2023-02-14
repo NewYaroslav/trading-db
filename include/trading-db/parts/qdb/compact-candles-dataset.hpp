@@ -301,8 +301,8 @@ namespace trading_db {
 			// определяем длину массива в зависимости от наличия метки времени
 			const size_t length = 2 +
 				conv_int_type_to_bytes(reg_b0) + conv_int_type_to_bytes(reg_b2) +
-				4 * conv_int_type_to_bytes(reg_b1) * ztime::MINUTES_IN_DAY +
-				conv_int_type_to_bytes(reg_b3) * ztime::MINUTES_IN_DAY;
+				4 * conv_int_type_to_bytes(reg_b1) * ztime::MIN_PER_DAY +
+				conv_int_type_to_bytes(reg_b3) * ztime::MIN_PER_DAY;
 
 			data.resize(length);
 
@@ -328,7 +328,7 @@ namespace trading_db {
 			const size_t sample_size = 4 * conv_int_type_to_bytes(reg_b1) + conv_int_type_to_bytes(reg_b3);
 
 			// инициализируем отсутствие данных для всех баров
-			for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+			for (size_t i = 0; i < ztime::MIN_PER_DAY; ++i) {
 				size_t sample_offset_ptr = offset_ptr + i * sample_size;
 				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
 				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
@@ -406,8 +406,8 @@ namespace trading_db {
 			offset_ptr = get_u64_value(start_volume, reg_b2, p, offset_ptr);
 			uint64_t last_price = start_price, last_volume = start_volume;
 
-			for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
-				const uint64_t timestamp = i * ztime::SECONDS_IN_MINUTE + start_timestamp;
+			for (size_t i = 0; i < ztime::MIN_PER_DAY; ++i) {
+				const uint64_t timestamp = i * ztime::SEC_PER_MIN + start_timestamp;
 				size_t sample_offset_ptr = offset_ptr + i * sample_size;
 				bool status = false;
 				check_no_value(status, reg_b1, p, sample_offset_ptr);
@@ -493,8 +493,8 @@ namespace trading_db {
 			// определяем длину массива
 			const size_t length = 2 +
 				conv_int_type_to_bytes(reg_b0) + conv_int_type_to_bytes(reg_b2) +
-				4 * conv_int_type_to_bytes(reg_b1) * ztime::MINUTES_IN_DAY +
-				conv_int_type_to_bytes(reg_b3) * ztime::MINUTES_IN_DAY;
+				4 * conv_int_type_to_bytes(reg_b1) * ztime::MIN_PER_DAY +
+				conv_int_type_to_bytes(reg_b3) * ztime::MIN_PER_DAY;
 
 			data.resize(length);
 
@@ -518,7 +518,7 @@ namespace trading_db {
 			const size_t sample_size = 4 * conv_int_type_to_bytes(reg_b1) + conv_int_type_to_bytes(reg_b3);
 
 			// инициализируем отсутствие данных для всех баров
-			for (size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+			for (size_t i = 0; i < ztime::MIN_PER_DAY; ++i) {
 				size_t sample_offset_ptr = offset_ptr + i * sample_size;
 				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);
 				sample_offset_ptr = set_no_value(reg_b1, p, sample_offset_ptr);

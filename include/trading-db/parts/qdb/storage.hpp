@@ -471,14 +471,14 @@ namespace trading_db {
 				stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.tick_table + "'");
 				stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.tick_table + "'");
 				if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
-					t_max += ztime::SECONDS_IN_HOUR;
+					t_max += ztime::SEC_PER_HOUR;
 					return true;
 				}
 			} else {
 				stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.candle_table + "'");
 				stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.candle_table + "'");
 				if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
-					t_max += ztime::SECONDS_IN_DAY;
+					t_max += ztime::SEC_PER_HOUR;
 					return true;
 				}
 			}

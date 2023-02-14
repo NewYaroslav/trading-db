@@ -17,14 +17,14 @@ int main() {
     std::cout << "Hello world!" << std::endl;
     // проверяем данные баров
     {
-        std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> candles;
+        std::array<trading_db::Candle, ztime::MIN_PER_DAY> candles;
         const size_t price_scale = 5;
         const size_t volume_scale = 5;
         trading_db::QdbCompactDataset dataset;
 
         const uint64_t timestamp_start = ztime::get_timestamp(1,1,2021,0,0,0);
 
-        for(size_t i = 0; i < ztime::MINUTES_IN_DAY; ++i) {
+        for(size_t i = 0; i < ztime::MIN_PER_DAY; ++i) {
             const uint64_t t = timestamp_start + i * 60;
             trading_db::Candle candle;
             candle.open = get_price(t);
@@ -38,7 +38,7 @@ int main() {
 
         dataset.write_candles(candles, price_scale, volume_scale);
 
-        std::array<trading_db::Candle, ztime::MINUTES_IN_DAY> r_candles;
+        std::array<trading_db::Candle, ztime::MIN_PER_DAY> r_candles;
         size_t r_price_scale = 0;
         size_t r_volume_scale = 0;
 
@@ -83,7 +83,7 @@ int main() {
 
         const uint64_t timestamp_start = ztime::get_timestamp(1,1,2021,0,0,0);
 
-        for(uint64_t i = timestamp_start; i < (timestamp_start + ztime::SECONDS_IN_HOUR); i += 10) {
+        for(uint64_t i = timestamp_start; i < (timestamp_start + ztime::SEC_PER_HOUR); i += 10) {
             const uint64_t t = i * 1000;
             const double bid = get_price(t);
             const double ask = bid + 1.1;

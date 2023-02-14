@@ -26,12 +26,12 @@ namespace trading_db {
 			const uint64_t t)>	on_ticks	= nullptr;
 
 		std::function<void(
-			const std::array<Candle, ztime::MINUTES_IN_DAY> &candles,
+			const std::array<Candle, ztime::MIN_PER_DAY> &candles,
 			const uint64_t t)>	on_candles	= nullptr;
 
 	private:
 		std::map<uint64_t, ShortTick>				ticks_buffer;
-		std::array<Candle, ztime::MINUTES_IN_DAY>	candles_buffer;
+		std::array<Candle, ztime::MIN_PER_DAY>	    candles_buffer;
 		uint64_t time_ticks_buffer = 0;
 		uint64_t time_candles_buffer = 0;
 
@@ -62,7 +62,7 @@ namespace trading_db {
 		}
 
 		void write(const Candle &candle) noexcept {
-			const uint64_t timestamp_day = ztime::get_first_timestamp_day(candle.timestamp);
+			const uint64_t timestamp_day = ztime::start_of_day(candle.timestamp);
 			if (timestamp_day != time_candles_buffer) {
 				if (time_candles_buffer) {
 					if (on_candles) on_candles(candles_buffer, time_candles_buffer);
@@ -75,7 +75,7 @@ namespace trading_db {
 		}
 
 		void write(const Tick &tick) {
-			const uint64_t timestamp_hour = ztime::get_first_timestamp_hour(tick.timestamp_ms / ztime::MILLISECONDS_IN_SECOND);
+			const uint64_t timestamp_hour = ztime::start_of_hour_sec(tick.timestamp_ms);
 			if (timestamp_hour != time_ticks_buffer) {
 				if (time_ticks_buffer) {
 					if (on_ticks) on_ticks(ticks_buffer, time_ticks_buffer);

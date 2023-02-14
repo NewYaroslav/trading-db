@@ -358,7 +358,7 @@ namespace trading_db {
 					total_sell_stats.win();
 				}
 
-				stats_year[ztime::get_first_timestamp_year(timestamp)].win();
+				stats_year[ztime::start_of_year(timestamp)].win();
 				stats_month[ztime::get_month(timestamp)].win();
 				stats_day_month[ztime::get_day_month(timestamp)].win();
 				stats_hour_day[ztime::get_hour_day(timestamp)].win();
@@ -393,7 +393,7 @@ namespace trading_db {
 					total_sell_stats.loss();
 				}
 
-				stats_year[ztime::get_first_timestamp_year(timestamp)].loss();
+				stats_year[ztime::start_of_year(timestamp)].loss();
 				stats_month[ztime::get_month(timestamp)].loss();
 				stats_day_month[ztime::get_day_month(timestamp)].loss();
 				stats_hour_day[ztime::get_hour_day(timestamp)].loss();
@@ -428,7 +428,7 @@ namespace trading_db {
 					total_sell_stats.standoff();
 				}
 
-				stats_year[ztime::get_first_timestamp_year(timestamp)].standoff();
+				stats_year[ztime::start_of_year(timestamp)].standoff();
 				stats_month[ztime::get_month(timestamp)].standoff();
 				stats_day_month[ztime::get_day_month(timestamp)].standoff();
 				stats_hour_day[ztime::get_hour_day(timestamp)].standoff();
@@ -596,9 +596,9 @@ namespace trading_db {
 					if (!bet.demo && !config.use_real) continue;
 					if (bet.amount == 0) continue;
 
-					const ztime::timestamp_t timestamp = bet.open_date / ztime::MILLISECONDS_IN_SECOND;
-					const ztime::timestamp_t end_timestamp = bet.close_date / ztime::MILLISECONDS_IN_SECOND;
-					const ztime::timestamp_t first_timestamp_day = ztime::get_first_timestamp_day(timestamp);
+					const ztime::timestamp_t timestamp = ztime::ms_to_sec(bet.open_date);
+					const ztime::timestamp_t end_timestamp = ztime::ms_to_sec(bet.close_date);
+					const ztime::timestamp_t first_timestamp_day = ztime::start_of_day(timestamp);
 
 					const size_t second = ztime::get_second_minute(timestamp);
 					const size_t hour = ztime::get_hour_day(timestamp);
@@ -878,7 +878,7 @@ namespace trading_db {
 
 					bool is_drawdown = false;
 
-					trades_balance.x_data.push_back(ztime::get_first_timestamp_day(temp_balance.begin()->first));
+					trades_balance.x_data.push_back(ztime::start_of_day(temp_balance.begin()->first));
 					trades_balance.y_data.push_back(balance);
 					for (auto &b : temp_balance) {
 						const double prev_balance = balance;

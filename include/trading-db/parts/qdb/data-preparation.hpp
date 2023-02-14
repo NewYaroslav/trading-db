@@ -123,7 +123,7 @@ namespace trading_db {
 		}
 
 		inline bool compress_candles(
-				const std::array<Candle, ztime::MINUTES_IN_DAY> &src,
+				const std::array<Candle, ztime::MIN_PER_DAY> &src,
 				std::vector<uint8_t> &dst) noexcept {
 			trading_db::QdbCompactDataset dataset;
 			dataset.write_candles(src, config.price_scale, 0);
@@ -134,7 +134,7 @@ namespace trading_db {
 		inline bool decompress_candles(
 				const uint64_t timestamp_day,
 				const std::vector<uint8_t> &src,
-				std::array<Candle, ztime::MINUTES_IN_DAY> &dst) noexcept {
+				std::array<Candle, ztime::MIN_PER_DAY> &dst) noexcept {
 			trading_db::QdbCompactDataset dataset;
 			auto &data = dataset.get_data();
 			if (!decompress_raw_data((const uint8_t *)config.dictionary_candles_ptr, config.dictionary_candles_size, src, data)) {
@@ -149,7 +149,7 @@ namespace trading_db {
 				const uint64_t timestamp_hour,
 				const std::map<uint64_t, trading_db::ShortTick> &src,
 				std::vector<uint8_t> &dst) noexcept {
-			const uint64_t t_ms = timestamp_hour * ztime::MILLISECONDS_IN_SECOND;
+			const uint64_t t_ms = timestamp_hour * ztime::MS_PER_SEC;
 			trading_db::QdbCompactDataset dataset;
 			dataset.write_ticks(src, config.price_scale, t_ms);
 			auto &data = dataset.get_data();
@@ -160,7 +160,7 @@ namespace trading_db {
 				const uint64_t timestamp_hour,
 				const std::vector<uint8_t> &src,
 				std::map<uint64_t, trading_db::ShortTick> &dst) noexcept {
-			const uint64_t t_ms = timestamp_hour * ztime::MILLISECONDS_IN_SECOND;
+			const uint64_t t_ms = timestamp_hour * ztime::MS_PER_SEC;
 			trading_db::QdbCompactDataset dataset;
 			auto &data = dataset.get_data();
 			if (!decompress_raw_data(config.dictionary_ticks_ptr, config.dictionary_ticks_size, src, data)) {

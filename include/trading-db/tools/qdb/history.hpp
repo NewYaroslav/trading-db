@@ -150,15 +150,14 @@ namespace trading_db {
 
 		bool init(const Config &user_config) {
 
-			const uint64_t tick_period_ms = (uint64_t)(user_config.tick_period * (double)ztime::MILLISECONDS_IN_SECOND + 0.5);
-			const uint64_t timeframe_ms = user_config.timeframe * (uint64_t)ztime::MILLISECONDS_IN_SECOND;
+			const uint64_t tick_period_ms = (uint64_t)(user_config.tick_period * (double)ztime::MS_PER_SEC + 0.5);
+			const uint64_t timeframe_ms = user_config.timeframe * (uint64_t)ztime::MS_PER_SEC;
 
 			internal_config.timeframe = static_cast<QDB_TIMEFRAMES>(user_config.timeframe / 60);
 
 			//{ Настариваем фильтр времени
-			const uint64_t ms_day = ztime::SECONDS_IN_DAY * ztime::MILLISECONDS_IN_SECOND;
-			for (uint64_t t_ms = 0; t_ms < ms_day; t_ms += tick_period_ms) {
-				const uint64_t t = t_ms / ztime::MILLISECONDS_IN_SECOND;
+			for (uint64_t t_ms = 0; t_ms < ztime::MS_PER_DAY; t_ms += tick_period_ms) {
+				const uint64_t t = t_ms / ztime::MS_PER_SEC;
 				std::set<int32_t> period_id;
 				bool is_trade_period = false;
 				for (size_t j = 0; j < user_config.trade_period.size(); ++j) {
@@ -217,14 +216,14 @@ namespace trading_db {
 				TradeBoResult		&result		// Результат сигнала
 				) {
 
-			const uint64_t duration_ms		= (uint64_t)(signal.duration * (double)ztime::MILLISECONDS_IN_SECOND);
-			const uint64_t trade_delay_ms	= (uint64_t)(signal.delay * (double)ztime::MILLISECONDS_IN_SECOND);
+			const uint64_t duration_ms		= (uint64_t)(signal.duration * (double)ztime::MS_PER_SEC);
+			const uint64_t trade_delay_ms	= (uint64_t)(signal.delay * (double)ztime::MS_PER_SEC);
 			const uint64_t open_time_ms		= signal.t_ms + trade_delay_ms;
 			const uint64_t close_time_ms	= open_time_ms + duration_ms;
 
-			result.send_date = (double)signal.t_ms / (double)ztime::MILLISECONDS_IN_SECOND;
-			result.open_date = (double)open_time_ms / (double)ztime::MILLISECONDS_IN_SECOND;
-			result.close_date = (double)close_time_ms / (double)ztime::MILLISECONDS_IN_SECOND;
+			result.send_date = (double)signal.t_ms / (double)ztime::MS_PER_SEC;
+			result.open_date = (double)open_time_ms / (double)ztime::MS_PER_SEC;
+			result.close_date = (double)close_time_ms / (double)ztime::MS_PER_SEC;
 			result.ok = false;
 			result.win = false;
 
@@ -262,10 +261,10 @@ namespace trading_db {
 			// Предустановим константы
 			const uint64_t start_date_ms =
 				ztime::get_first_timestamp_day(local_config.start_date) *
-				ztime::MILLISECONDS_IN_SECOND;
+				ztime::MS_PER_SEC;
 			const uint64_t stop_date_ms =
 				ztime::get_first_timestamp_day(local_config.stop_date) *
-				ztime::MILLISECONDS_IN_SECOND;
+				ztime::MS_PER_SEC;
 
 			// Количество потоков
 			const size_t number_threads = std::thread::hardware_concurrency();
@@ -287,8 +286,8 @@ namespace trading_db {
 						// Наличие нового тика
 						bool		is_new_tick			= false;
 
-						const uint64_t tick_period_ms = (uint64_t)(local_config.tick_period * (double)ztime::MILLISECONDS_IN_SECOND + 0.5);
-						const uint64_t date_step_ms = ztime::SECONDS_IN_DAY * ztime::MILLISECONDS_IN_SECOND;
+						const uint64_t tick_period_ms = (uint64_t)(local_config.tick_period * (double)ztime::MS_PER_SEC + 0.5);
+						const uint64_t date_step_ms = ztime::MS_PER_DAY;
 						for (uint64_t
 								date_ms = start_date_ms;
 								date_ms <= stop_date_ms;
@@ -306,13 +305,13 @@ namespace trading_db {
 
 								if (internal_config.candle_flag[i]) {
 									//{ Вызываем on_candle
-									const uint64_t t = t_ms / ztime::MILLISECONDS_IN_SECOND;
+									const uint64_t t = t_ms / ztime::MS_PER_SEC;
 									const uint64_t timestamp_minute = ztime::get_first_timestamp_minute(t);
-									const uint64_t timestamp_candle = timestamp_minute - ztime::SECONDS_IN_MINUTE;
+									const uint64_t timestamp_candle = timestamp_minute - ztime::SEC_PER_MIN;
 									trading_db::Candle db_candle;
 									if (symbols_db[s]->get_candle(db_candle, timestamp_candle, internal_config.timeframe)) {
 										local_config.on_candle(s, t_ms, internal_config.period_id[i], db_candle);
-										last_update_time_ms = (db_candle.timestamp + ztime::SECONDS_IN_MINUTE) * ztime::MILLISECONDS_IN_SECOND;
+										last_update_time_ms = (db_candle.timestamp + ztime::SEC_PER_MIN) * ztime::MS_PER_SEC;
 									}
 									// для режима вызова on_test по новому тику
 									if (local_config.use_new_tick_mode) {

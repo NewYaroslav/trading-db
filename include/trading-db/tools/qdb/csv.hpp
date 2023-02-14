@@ -66,7 +66,7 @@ namespace trading_db {
 
 		inline uint64_t change_timezone_ms(const uint64_t t_ms) noexcept {
 			if (on_change_timezone_ms) return on_change_timezone_ms(t_ms);
-			return (uint64_t)((int64_t)t_ms + config.time_zone * (int64_t)ztime::MILLISECONDS_IN_SECOND);
+			return (uint64_t)((int64_t)t_ms + config.time_zone * (int64_t)ztime::MS_PER_SEC);
 		}
 
 		inline uint64_t change_timezone(const uint64_t t) noexcept {

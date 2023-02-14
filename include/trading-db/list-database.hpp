@@ -7,10 +7,10 @@
 #endif
 
 #include "config.hpp"
-#include "utility/sqlite-func.hpp"
-#include "utility/async-tasks.hpp"
-#include "utility/print.hpp"
-#include "utility/files.hpp"
+#include "utils/sqlite-func.hpp"
+#include "utils/async-tasks.hpp"
+#include "utils/print.hpp"
+#include "utils/files.hpp"
 #include <siphash.hpp>
 #include <mutex>
 #include <atomic>
@@ -51,14 +51,14 @@ namespace trading_db {
 		std::string database_name;
 		sqlite3 *sqlite_db = nullptr;
 		// команды для транзакций
-		utility::SqliteTransaction sqlite_transaction;
+		utils::SqliteTransaction sqlite_transaction;
 		// предкомпилированные команды
-		utility::SqliteStmt stmt_replace_item;
-		utility::SqliteStmt stmt_replace_items;
-		utility::SqliteStmt stmt_insert_value;
-		utility::SqliteStmt stmt_get_value;
-		utility::SqliteStmt stmt_get_all_items;
-		utility::SqliteStmt stmt_get_all_values;
+		utils::SqliteStmt stmt_replace_item;
+		utils::SqliteStmt stmt_replace_items;
+		utils::SqliteStmt stmt_insert_value;
+		utils::SqliteStmt stmt_get_value;
+		utils::SqliteStmt stmt_get_all_items;
+		utils::SqliteStmt stmt_get_all_values;
 		// бэкап
 		bool is_backup = ATOMIC_VAR_INIT(false);
 		std::mutex backup_mutex;
@@ -67,7 +67,7 @@ namespace trading_db {
 
 		std::mutex method_mutex;
 
-		utility::AsyncTasks async_tasks;
+		utils::AsyncTasks async_tasks;
 
 		inline void print_error(const std::string message, const int line) noexcept {
 			if (config.use_log) {
@@ -84,7 +84,7 @@ namespace trading_db {
 				sqlite3 *&sqlite_db_ptr,
 				const std::string &db_name,
 				const bool readonly = false) noexcept {
-			utility::create_directory(db_name, true);
+			utils::create_directory(db_name, true);
 			// открываем и возможно еще создаем таблицу
 			int flags = readonly ?
 				(SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX) :
@@ -101,7 +101,7 @@ namespace trading_db {
 				"CREATE TABLE IF NOT EXISTS 'List' ("
 				"key				INTEGER PRIMARY KEY NOT NULL,"
 				"value				TEXT				NOT NULL)";
-			if (!utility::prepare(sqlite_db_ptr, create_list_table_sql)) return false;
+			if (!utils::prepare(sqlite_db_ptr, create_list_table_sql)) return false;
 			return true;
 		}
 
@@ -132,8 +132,8 @@ namespace trading_db {
 		template<class T>
 		bool replace_or_insert_db(
 				T &item,
-				utility::SqliteTransaction &transaction,
-				utility::SqliteStmt &stmt) noexcept {
+				utils::SqliteTransaction &transaction,
+				utils::SqliteStmt &stmt) noexcept {
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
 			if (item.key == 0) {
@@ -175,8 +175,8 @@ namespace trading_db {
 		template<class T>
 		bool replace_buffer_db(
 				const T &buffer,
-				utility::SqliteTransaction &transaction,
-				utility::SqliteStmt &stmt) noexcept {
+				utils::SqliteTransaction &transaction,
+				utils::SqliteStmt &stmt) noexcept {
 			if (buffer.empty()) return true;
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -211,8 +211,8 @@ namespace trading_db {
 
 		bool replace_map_db(
 				const std::map<int64_t, std::string> &buffer,
-				utility::SqliteTransaction &transaction,
-				utility::SqliteStmt &stmt) noexcept {
+				utils::SqliteTransaction &transaction,
+				utils::SqliteStmt &stmt) noexcept {
 			if (buffer.empty()) return true;
 			if (!transaction.begin_transaction()) return false;
 			sqlite3_reset(stmt.get());
@@ -247,7 +247,7 @@ namespace trading_db {
 
 		template<class T>
 		inline T get_item_db(
-				utility::SqliteStmt &stmt,
+				utils::SqliteStmt &stmt,
 				const int64_t key) noexcept {
 			T item;
 			int err = 0;
@@ -303,7 +303,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		inline T get_items_db(utility::SqliteStmt &stmt) noexcept {
+		inline T get_items_db(utils::SqliteStmt &stmt) noexcept {
 			T buffer;
 			int err = 0;
 			while (true) {
@@ -365,7 +365,7 @@ namespace trading_db {
 		}
 
 		template<class T>
-		inline T get_values_db(utility::SqliteStmt &stmt) noexcept {
+		inline T get_values_db(utils::SqliteStmt &stmt) noexcept {
 			T buffer;
 			int err = 0;
 			while (true) {
@@ -423,7 +423,7 @@ namespace trading_db {
 			return std::move(buffer);
 		}
 
-		inline std::map<int64_t, std::string> get_map_items_db(utility::SqliteStmt &stmt) noexcept {
+		inline std::map<int64_t, std::string> get_map_items_db(utils::SqliteStmt &stmt) noexcept {
 			std::map<int64_t, std::string> buffer;
 			int err = 0;
 			while (true) {
@@ -547,7 +547,7 @@ namespace trading_db {
 				is_backup = true;
 			}
 			async_tasks.create_task([&, path]() {
-				if (!utility::backup_form_db(path, this->sqlite_db)) {
+				if (!utils::backup_form_db(path, this->sqlite_db)) {
 					callback(path, true);
 					print_error("backup return false", __LINE__);
 				} else {
@@ -772,7 +772,7 @@ namespace trading_db {
 		inline bool remove_all() noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM 'List'");
+			return utils::prepare(sqlite_db, "DELETE FROM 'List'");
 		}
 
 		/** \brief Удалить значение по ключу
@@ -781,7 +781,7 @@ namespace trading_db {
 		inline bool remove_value(const int64_t key) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM 'List' WHERE key == " + std::to_string(key));
+			return utils::prepare(sqlite_db, "DELETE FROM 'List' WHERE key == " + std::to_string(key));
 		}
 
 		/** \brief Удалить элемент
@@ -790,7 +790,7 @@ namespace trading_db {
 		inline bool remove_item(const Item& item) noexcept {
 			std::lock_guard<std::mutex> lock(method_mutex);
 			if (!check_init_db()) return false;
-			return utility::prepare(sqlite_db, "DELETE FROM 'List' WHERE key == " + item.key);
+			return utils::prepare(sqlite_db, "DELETE FROM 'List' WHERE key == " + item.key);
 		}
 
 		/** \brief Удалить значения по ключам
@@ -807,7 +807,7 @@ namespace trading_db {
 				message += *it;
 			}
 			message += ")";
-			return utility::prepare(sqlite_db, message);
+			return utils::prepare(sqlite_db, message);
 		}
 
 		/** \brief Удалить массив элементов списка
@@ -824,7 +824,7 @@ namespace trading_db {
 				message += it->key;
 			}
 			message += ")";
-			return utility::prepare(sqlite_db, message);
+			return utils::prepare(sqlite_db, message);
 		}
 	};
 

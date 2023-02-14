@@ -386,7 +386,7 @@
 				</Linker>
 			</Target>
 			<Target title="next-tick">
-				<Option output="qdb-history" prefix_auto="1" extension_auto="1" />
+				<Option output="next-tick" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="mingw_64_7_3_0" />
@@ -434,6 +434,7 @@
 		<Unit filename="../../include/trading-db/parts/qdb/storage.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb/writer-price-buffer.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb/zstd.hpp" />
+		<Unit filename="../../include/trading-db/qdb.hpp" />
 		<Unit filename="../../include/trading-db/utils/-compact_candles_dataset.hpp" />
 		<Unit filename="../../include/trading-db/utils/-compact_ticks_dataset.hpp" />
 		<Unit filename="../../include/trading-db/utils/async-tasks.hpp" />

@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
 	};
 
 	history_config.on_date_msg = [&](const size_t s_index, const uint64_t t_ms) {
-		TRADING_DB_PRINT << "history: " << history_config.symbols[s_index] << " date " << ztime::get_str_date(t_ms / ztime::MILLISECONDS_IN_SECOND) << std::endl;
+		TRADING_DB_PRINT << "history: " << history_config.symbols[s_index] << " date " << ztime::get_str_date(t_ms / ztime::MS_PER_SEC) << std::endl;
 	};
 
 	history_config.on_symbol = [&](const size_t s_index) -> bool {
@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
 		for (auto &item : period_id) {
 			temp += std::to_string(item) + ";";
 		}
-		TRADING_DB_PRINT << "on_candle: " << symbols[s_index] << " p: " << temp << " t: " << ztime::get_str_time(candle.timestamp) << std::endl;
+		//TRADING_DB_PRINT << "on_candle: " << symbols[s_index] << "; c: " << candle.close << "; p: " << temp << "; t: " << ztime::get_str_time(candle.timestamp) << std::endl;
 	};
 
 	history_config.on_tick = [&](
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
 		for (auto &item : period_id) {
 			temp += std::to_string(item) + ";";
 		}
-		TRADING_DB_PRINT << "on_tick: " << symbols[s_index] << " p: " << temp << " t: " << ztime::get_str_time((double)t_ms/1000.0) << std::endl;
+		TRADING_DB_PRINT << "on_tick: " << symbols[s_index] << "; bid: " << tick.bid << "; p: " << temp << "; t: " << ztime::get_str_time((double)t_ms/1000.0) << std::endl;
 	};
 
 	history_config.on_test = [&](
