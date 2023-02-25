@@ -1,6 +1,6 @@
 #pragma once
-#ifndef TRADING_DB_BO_TRADES_DB_PARTS_BET_STATS_HPP_INCLUDED
-#define TRADING_DB_BO_TRADES_DB_PARTS_BET_STATS_HPP_INCLUDED
+#ifndef TRADING_DB_BO_TRADES_DB_PARTS_BO_STATS_HPP_INCLUDED
+#define TRADING_DB_BO_TRADES_DB_PARTS_BO_STATS_HPP_INCLUDED
 
 #include "common.hpp"
 #include <ztime.hpp>
@@ -20,7 +20,7 @@ namespace trading_db {
 				uint64_t	wins		= 0;
 				uint64_t	losses		= 0;
 				uint64_t	standoffs	= 0;
-				uint64_t	deals		= 0;
+				uint64_t	trades		= 0;
 				double		winrate		= 0;
 
 				WinrateStats() {};
@@ -43,15 +43,15 @@ namespace trading_db {
 				}
 
 				inline void calc() noexcept {
-					deals = wins + losses + standoffs;
-					winrate = deals == 0 ? 0.0 : (double)wins / (double)deals;
+					trades = wins + losses + standoffs;
+					winrate = trades == 0 ? 0.0 : (double)wins / (double)trades;
 				}
 
 				inline void clear() noexcept {
 					wins		= 0;
 					losses		= 0;
 					standoffs	= 0;
-					deals		= 0;
+					trades		= 0;
 					winrate		= 0;
 				}
 			};
@@ -66,6 +66,18 @@ namespace trading_db {
 					y_data.clear();
 					x_data.clear();
 					x_label.clear();
+				}
+
+				void get_min_max(double &min_x, double &max_x, double &min_y, double &max_y) {
+					if (x_data.empty() || y_data.empty()) {
+						return;
+					}
+					min_x = std::min(x_data.front(), min_x);
+					max_x = std::max(x_data.back(), max_x);
+					const double temp_min_y = *std::min_element(y_data.begin(), y_data.end());
+					const double temp_max_y = *std::max_element(y_data.begin(), y_data.end());
+					min_y = std::min(temp_min_y, min_y);
+					max_y = std::max(temp_max_y, max_y);
 				}
 			};
 
@@ -213,6 +225,7 @@ namespace trading_db {
 
 			// для построения графика баланса
 			std::map<uint64_t, double> temp_balance;
+			std::map<uint64_t, double> temp_profit;
 
 			template<class T1, class T2>
 			void calc_winrate(T1 &winrate, T2 &wins, T2 &losses) {
@@ -233,9 +246,16 @@ namespace trading_db {
 				// для фильтрации данных
 				std::vector<std::string>	brokers;
 				std::vector<std::string>	signals;
+				std::vector<std::string>	symbols;
 				std::string					currency;
 				bool						use_demo	= true;		/// Использовать сделки на DEMO
 				bool						use_real	= true;		/// Использовать сделки на REAL
+
+				bool						use_weekday = false;
+				int							weekday = 0;
+
+				bool						use_hour = false;
+				int							hour = 0;
 
 				int							stats_type	= StatsTypes::ALL_BET;	///	 Тип статистики (первая сделка, последняя, все сделки)
 
@@ -451,6 +471,7 @@ namespace trading_db {
 
 			void clear() noexcept {
 				temp_balance.clear();
+				temp_profit.clear();
 
 				stats_symbol.clear();
 
@@ -557,6 +578,13 @@ namespace trading_db {
 
 			}
 
+			std::function<double(const double value, const std::string &from)> on_convert = nullptr;
+
+			double convert(const double value, const std::string &from) {
+				if (on_convert) return on_convert(value, from);
+				return value;
+			}
+
 			template<class T>
 			void calc(const T &bets, const double start_balance) noexcept {
 				clear();
@@ -592,6 +620,17 @@ namespace trading_db {
 						if (!found) continue;
 					}
 
+					if (!config.symbols.empty()) {
+						bool found = false;
+						for (size_t i = 0; i < config.symbols.size(); ++i) {
+							if (config.symbols[i] == bet.symbol) {
+								found = true;
+								break;
+							}
+						}
+						if (!found) continue;
+					}
+
 					if (bet.demo && !config.use_demo) continue;
 					if (!bet.demo && !config.use_real) continue;
 					if (bet.amount == 0) continue;
@@ -606,6 +645,19 @@ namespace trading_db {
 					const size_t day_month = ztime::get_day_month(timestamp);
 					const size_t month = ztime::get_month(timestamp);
 
+					if (config.use_weekday && weekday != config.weekday) continue;
+					if (config.use_hour && hour != config.hour) continue;
+
+					const double bo_profit = convert(bet.profit, bet.currency);
+					const double bo_amount = convert(bet.amount, bet.currency);
+
+					if (bet.status == BoStatus::WIN ||
+						bet.status == BoStatus::LOSS ||
+						bet.status == BoStatus::STANDOFF) {
+						if (temp_profit.empty()) temp_profit[timestamp] = 0;
+						temp_profit[end_timestamp] += bo_profit;
+					}
+
 					if (bet.status == BoStatus::WIN) {
 						win(bet.symbol, bet.contract_type, timestamp);
 
@@ -617,43 +669,44 @@ namespace trading_db {
 						// считаем статистику для пинга
 						stats_ping[bet.ping] = 1;
 
-						profit += bet.profit;
+						profit += bo_profit;
 
-						trades_profit.y_data.push_back(profit);
-						trades_profit.x_data.push_back(timestamp);
+						///trades_profit.y_data.push_back(profit);
+						///trades_profit.x_data.push_back(timestamp);
+
 
 						if (day_profit.x_data.empty() || day_profit.x_data.back() != first_timestamp_day) {
 							day_profit.x_data.push_back(first_timestamp_day);
-							day_profit.y_data.push_back(bet.profit);
+							day_profit.y_data.push_back(bo_profit);
 						} else {
-							day_profit.y_data.back() += bet.profit;
+							day_profit.y_data.back() += bo_profit;
 						}
 
 						if (temp_balance.find(timestamp) == temp_balance.end()) {
-							temp_balance[timestamp] = -bet.amount;
+							temp_balance[timestamp] = -bo_amount;
 						} else {
-							temp_balance[timestamp] += -bet.amount;
+							temp_balance[timestamp] += -bo_amount;
 						}
 						if (temp_balance.find(end_timestamp) == temp_balance.end()) {
-							temp_balance[end_timestamp] = (bet.amount + bet.profit);
+							temp_balance[end_timestamp] = (bo_amount + bo_profit);
 						} else {
-							temp_balance[end_timestamp] += (bet.amount + bet.profit);
+							temp_balance[end_timestamp] += (bo_amount + bo_profit);
 						}
 
-						aver_profit_per_trade += bet.profit / bet.amount;
-						aver_absolute_profit_per_trade += bet.profit;
+						aver_profit_per_trade += bo_profit / bo_amount;
+						aver_absolute_profit_per_trade += bo_profit;
 						++counter_bet;
-						if (bet.profit > max_absolute_profit_per_trade) max_absolute_profit_per_trade = bet.profit;
+						if (bo_profit > max_absolute_profit_per_trade) max_absolute_profit_per_trade = bo_profit;
 
-						gross_profit += bet.profit;
-						total_profit += bet.profit;
-						total_volume += bet.amount;
+						gross_profit += bo_profit;
+						total_profit += bo_profit;
+						total_volume += bo_amount;
 
-						profit_60s[second] += bet.profit;
-						profit_24h[hour] += bet.profit;
-						profit_7wd[weekday] += bet.profit;
-						profit_31d[day_month - 1] += bet.profit;
-						profit_12m[month - 1] += bet.profit;
+						profit_60s[second] += bo_profit;
+						profit_24h[hour] += bo_profit;
+						profit_7wd[weekday] += bo_profit;
+						profit_31d[day_month - 1] += bo_profit;
+						profit_12m[month - 1] += bo_profit;
 
 						trades_60s[second] += 1;
 						trades_24h[hour] += 1;
@@ -667,7 +720,7 @@ namespace trading_db {
 						wins_31d[day_month - 1] += 1;
 						wins_12m[month - 1] += 1;
 
-						aver_absolute_trade_size += bet.amount;
+						aver_absolute_trade_size += bo_amount;
 					} else
 					if (bet.status == BoStatus::LOSS) {
 						loss(bet.symbol, bet.contract_type, timestamp);
@@ -680,22 +733,22 @@ namespace trading_db {
 						// считаем статистику для пинга
 						stats_ping[bet.ping] = -1;
 
-						profit -= bet.amount;
+						profit -= bo_amount;
 
-						trades_profit.y_data.push_back(profit);
-						trades_profit.x_data.push_back(timestamp);
+						///trades_profit.y_data.push_back(profit);
+						///trades_profit.x_data.push_back(timestamp);
 
 						if (day_profit.x_data.empty() || day_profit.x_data.back() != first_timestamp_day) {
 							day_profit.x_data.push_back(first_timestamp_day);
-							day_profit.y_data.push_back(-bet.amount);
+							day_profit.y_data.push_back(-bo_amount);
 						} else {
-							day_profit.y_data.back() += -bet.amount;
+							day_profit.y_data.back() += -bo_amount;
 						}
 
 						if (temp_balance.find(timestamp) == temp_balance.end()) {
 							temp_balance[timestamp] = -bet.amount;
 						} else {
-							temp_balance[timestamp] += -bet.amount;
+							temp_balance[timestamp] += -bo_amount;
 						}
 						if (temp_balance.find(end_timestamp) == temp_balance.end()) {
 							temp_balance[end_timestamp] = 0;
@@ -704,18 +757,18 @@ namespace trading_db {
 						}
 
 						aver_profit_per_trade -= 1.0;
-						aver_absolute_profit_per_trade -= bet.amount;
+						aver_absolute_profit_per_trade -= bo_amount;
 						++counter_bet;
 
-						gross_loss += bet.amount;
-						total_profit -= bet.amount;
-						total_volume += bet.amount;
+						gross_loss += bo_amount;
+						total_profit -= bo_amount;
+						total_volume += bo_amount;
 
-						profit_60s[second] -= bet.amount;
-						profit_24h[hour] -= bet.amount;
-						profit_7wd[weekday] -= bet.amount;
-						profit_31d[day_month - 1] -= bet.amount;
-						profit_12m[month - 1] -= bet.amount;
+						profit_60s[second] -= bo_amount;
+						profit_24h[hour] -= bo_amount;
+						profit_7wd[weekday] -= bo_amount;
+						profit_31d[day_month - 1] -= bo_amount;
+						profit_12m[month - 1] -= bo_amount;
 
 						trades_60s[second] += 1;
 						trades_24h[hour] += 1;
@@ -729,7 +782,7 @@ namespace trading_db {
 						losses_31d[day_month - 1] += 1;
 						losses_12m[month - 1] += 1;
 
-						aver_absolute_trade_size += bet.amount;
+						aver_absolute_trade_size += bo_amount;
 					} else
 					if (bet.status == BoStatus::STANDOFF) {
 						standoff(bet.symbol, bet.contract_type, timestamp);
@@ -742,8 +795,8 @@ namespace trading_db {
 						// считаем статистику для пинга
 						stats_ping[bet.ping] = 0;
 
-						trades_profit.y_data.push_back(profit);
-						trades_profit.x_data.push_back(timestamp);
+						///trades_profit.y_data.push_back(profit);
+						///trades_profit.x_data.push_back(timestamp);
 
 						if (day_profit.x_data.empty() || day_profit.x_data.back() != first_timestamp_day) {
 							day_profit.x_data.push_back(first_timestamp_day);
@@ -751,19 +804,19 @@ namespace trading_db {
 						}
 
 						if (temp_balance.find(timestamp) == temp_balance.end()) {
-							temp_balance[timestamp] = -bet.amount;
+							temp_balance[timestamp] = -bo_amount;
 						} else {
-							temp_balance[timestamp] += -bet.amount;
+							temp_balance[timestamp] += -bo_amount;
 						}
 						if (temp_balance.find(end_timestamp) == temp_balance.end()) {
-							temp_balance[end_timestamp] = bet.amount;
+							temp_balance[end_timestamp] = bo_amount;
 						} else {
-							temp_balance[end_timestamp] += bet.amount;
+							temp_balance[end_timestamp] += bo_amount;
 						}
 
 						++counter_bet;
 
-						total_volume += bet.amount;
+						total_volume += bo_amount;
 
 						trades_60s[second] += 1;
 						trades_24h[hour] += 1;
@@ -777,7 +830,7 @@ namespace trading_db {
 						standoffs_31d[day_month - 1] += 1;
 						standoffs_12m[month - 1] += 1;
 
-						aver_absolute_trade_size += bet.amount;
+						aver_absolute_trade_size += bo_amount;
 					}
 				}
 
@@ -836,19 +889,19 @@ namespace trading_db {
 					for (size_t i = 0; i < trades_1s.size(); ++i) {
 						trades_1s[i].calc();
 						winrate_ping_1s[i] = trades_1s[i].winrate;
-						trades_ping_1s[i] = trades_1s[i].deals;
+						trades_ping_1s[i] = trades_1s[i].trades;
 					}
 
 					for (size_t i = 0; i < trades_50ms.size(); ++i) {
 						trades_50ms[i].calc();
 						winrate_ping_50ms[i] = trades_50ms[i].winrate;
-						trades_ping_50ms[i] = trades_50ms[i].deals;
+						trades_ping_50ms[i] = trades_50ms[i].trades;
 					}
 
 					for (size_t i = 0; i < trades_100ms.size(); ++i) {
 						trades_100ms[i].calc();
 						winrate_ping_100ms[i] = trades_100ms[i].winrate;
-						trades_ping_100ms[i] = trades_100ms[i].deals;
+						trades_ping_100ms[i] = trades_100ms[i].trades;
 					}
 				}
 
@@ -864,16 +917,35 @@ namespace trading_db {
 					profit_factor = gross_profit > 0 ? std::numeric_limits<double>::max() : 0;
 				}
 
+				max_absolute_drawdown = 0;
+
+				if (!temp_profit.empty()) {
+					double max_profit = 0;
+					double profit = 0;
+					for (auto &p : temp_profit) {
+						profit += p.second;
+						max_profit = std::max(max_profit, profit);
+						max_absolute_drawdown = std::max(max_absolute_drawdown, (max_profit - profit));
+						if (!trades_profit.y_data.empty()) {
+							if (trades_profit.y_data.back() != profit) {
+								trades_profit.y_data.push_back(trades_profit.y_data.back());
+								trades_profit.x_data.push_back(p.first);
+							}
+						}
+						trades_profit.y_data.push_back(profit);
+						trades_profit.x_data.push_back(p.first);
+					}
+				}
+
+				max_drawdown = 0;
+				aver_drawdown = 0;
+
 				// рисуем график баланса
 				if (!temp_balance.empty() && start_balance > 0) {
 
 					double balance = start_balance;
 					double last_max_balance = start_balance;
 					double diff_balance = 0;
-
-					max_absolute_drawdown = 0;
-					max_drawdown = 0;
-					aver_drawdown = 0;
 					size_t counter_aver_drawdown = 0;
 
 					bool is_drawdown = false;
@@ -918,27 +990,29 @@ namespace trading_db {
 				total_buy_stats.calc();
 				total_sell_stats.calc();
 
-				//> винрейт по символам
+				//{ винрейт по символам
 				for (auto &item : stats_symbol) {
 					item.second.calc();
 					symbol_winrate.x_label.push_back(item.first);
 					symbol_winrate.y_data.push_back(item.second.winrate * 100);
 					symbol_trades.x_label.push_back(item.first);
-					symbol_trades.y_data.push_back(item.second.deals);
-				} //<
+					symbol_trades.y_data.push_back(item.second.trades);
+				}
+				//}
 
-				//> винрейт по сигналам
+				//{ винрейт по сигналам
 				for (auto &item : stats_signal) {
 					item.second.calc();
 					signal_winrate.x_label.push_back(item.first);
 					signal_winrate.y_data.push_back(item.second.winrate * 100);
 					signal_trades.x_label.push_back(item.first);
-					signal_trades.y_data.push_back(item.second.deals);
-				} //<
+					signal_trades.y_data.push_back(item.second.trades);
+				}
+				//}
 
 			}
 		}; // Stats
 	}; // bo_trades_db
 };
 
-#endif // TRADING_DB_BO_TRADES_DB_PARTS_BET_STATS_HPP_INCLUDED
+#endif // TRADING_DB_BO_TRADES_DB_PARTS_BO_STATS_HPP_INCLUDED

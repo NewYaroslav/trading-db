@@ -1,20 +1,21 @@
 #include <iostream>
-#include <trading-db/bet-database.hpp>
+#include <trading-db/bo-trades-db.hpp>
 
 int main() {
     std::cout << "Hello world!" << std::endl;
     const std::string path("storage/example-bet-db.db");
     std::cout << "#test-1" << std::endl << std::endl;
     {
-        trading_db::BetDatabase bet_db;
+        trading_db::BoTradesDB bet_db;
         bet_db.config.use_log = true;
 
-        std::cout << bet_db.open(path) << std::endl;
+        std::cout << "#open: " << bet_db.open(path) << std::endl;
 
-        std::cout << "#remove_all" << std::endl;
-        std::cout << bet_db.remove_all() << std::endl;
+        std::system("pause");
 
-        using bet_t = trading_db::BetDatabase::BetData;
+        std::cout << "#remove_all: " << bet_db.remove_all() << std::endl;
+
+        using bet_t = trading_db::BoTradesDB::BoResult;
 
         std::cout << "#fill data" << std::endl;
         std::vector<bet_t> bets;
@@ -27,8 +28,8 @@ int main() {
             bet.duration = 60 * (i / 100);
             bet.close_date = bet.open_date + bet.duration;
             bet.comment = "test";
-            if (i % 2 == 0) bet.contract_type = trading_db::BetDatabase::ContractType::BUY;
-            else bet.contract_type = trading_db::BetDatabase::ContractType::SELL;
+            if (i % 2 == 0) bet.contract_type = trading_db::BoTradesDB::ContractType::BUY;
+            else bet.contract_type = trading_db::BoTradesDB::ContractType::SELL;
             bet.currency = "USD";
             bet.delay = 50 + i * 10;
             bet.ping = 100 + i * 10;
@@ -39,36 +40,36 @@ int main() {
             bet.profit = bet.amount * bet.payout;
             if ((i + 2) % 3 == 0) bet.signal = "test-1";
             else bet.signal = "test-2";
-            if ((i + 3) % 3 == 0) bet.status = trading_db::BetDatabase::BetStatus::WIN;
-            else bet.status = trading_db::BetDatabase::BetStatus::LOSS;
+            if ((i + 3) % 3 == 0) bet.status = trading_db::BoTradesDB::BoStatus::WIN;
+            else bet.status = trading_db::BoTradesDB::BoStatus::LOSS;
             bet.step = 0;
             if ((i + 4) % 3 == 0) bet.symbol = "EURCAD";
             else bet.symbol = "AUDCAD";
-            bet.type = trading_db::BetDatabase::BoType::SPRINT;
+            bet.type = trading_db::BoTradesDB::BoType::SPRINT;
             bet.user_data = "12345";
-            bet.uid = bet_db.get_bet_uid();
+            bet.uid = bet_db.get_trade_uid();
 
             bets.push_back(bet);
         }
 
         std::cout << "#replace" << std::endl;
         for (size_t i = 0; i < 1000; ++i) {
-            bet_db.replace_bet(bets[i]);
+            bet_db.replace_trade(bets[i]);
         }
         std::cout << "#flush" << std::endl;
         bet_db.flush();
 
         std::system("pause");
 
-        std::cout << "#get_bets" << std::endl;
+        std::cout << "#get_trades" << std::endl;
 
-        trading_db::BetDatabase::RequestConfig req_config;
+        trading_db::BoTradesDB::RequestConfig req_config;
         //req_config.min_amount = 108;
         req_config.brokers = {"TEST 1", "TEST 11"};
         req_config.symbols = {"AUDCAD"};
         req_config.min_payout = 0.8;
 
-        std::vector<bet_t> read_bets = bet_db.get_bets<std::vector<bet_t>>(req_config);
+        std::vector<bet_t> read_bets = bet_db.get_trades<std::vector<bet_t>>(req_config);
 
         for (auto bet : read_bets) {
             std::cout << "--------------------------------------" << std::endl;
@@ -106,7 +107,7 @@ int main() {
     std::system("pause");
     std::cout << "#test-2" << std::endl << std::endl;
     {
-        trading_db::BetDatabase bet_db;
+        trading_db::BoTradesDB bet_db;
         bet_db.config.use_log = true;
 
         std::cout << bet_db.open(path) << std::endl;
@@ -114,7 +115,7 @@ int main() {
         std::cout << "#remove_all" << std::endl;
         std::cout << bet_db.remove_all() << std::endl;
 
-        using bet_t = trading_db::BetDatabase::BetData;
+        using bet_t = trading_db::BoTradesDB::BoResult;
 
         std::cout << "#fill data" << std::endl;
         std::vector<bet_t> bets;
@@ -127,8 +128,8 @@ int main() {
             bet.duration = 60 * (i / 100);
             bet.close_date = bet.open_date + bet.duration;
             bet.comment = "test";
-            if (i % 2 == 0) bet.contract_type = trading_db::BetDatabase::ContractType::BUY;
-            else bet.contract_type = trading_db::BetDatabase::ContractType::SELL;
+            if (i % 2 == 0) bet.contract_type = trading_db::BoTradesDB::ContractType::BUY;
+            else bet.contract_type = trading_db::BoTradesDB::ContractType::SELL;
             bet.currency = "USD";
             bet.delay = 50 + i * 10;
             bet.ping = 100 + i * 10;
@@ -139,18 +140,18 @@ int main() {
             bet.profit = bet.amount * bet.payout;
             if ((i + 2) % 3 == 0) bet.signal = "test-1";
             else bet.signal = "test-2";
-            if ((i + 3) % 3 == 0) bet.status = trading_db::BetDatabase::BetStatus::WIN;
-            else bet.status = trading_db::BetDatabase::BetStatus::LOSS;
+            if ((i + 3) % 3 == 0) bet.status = trading_db::BoTradesDB::BoStatus::WIN;
+            else bet.status = trading_db::BoTradesDB::BoStatus::LOSS;
             bet.step = 0;
             if ((i + 4) % 3 == 0) bet.symbol = "EURCAD";
             else bet.symbol = "AUDCAD";
-            bet.type = trading_db::BetDatabase::BoType::SPRINT;
+            bet.type = trading_db::BoTradesDB::BoType::SPRINT;
             bet.user_data = "12345";
-            bet.uid = bet_db.get_bet_uid();
+            bet.uid = bet_db.get_trade_uid();
             bets.push_back(bet);
         }
 
-        trading_db::BetDatabase::RequestConfig req_config;
+        trading_db::BoTradesDB::RequestConfig req_config;
         //req_config.min_amount = 108;
         req_config.brokers = {"TEST 1", "TEST 11"};
         req_config.symbols = {"AUDCAD"};
@@ -160,8 +161,8 @@ int main() {
         // можно одновременно писать и читать
         for (size_t k = 0; k < 1000; ++k) {
             for (size_t i = 0; i < bets.size(); ++i) {
-                bet_db.replace_bet(bets[i]);
-                std::vector<bet_t> read_bets = bet_db.get_bets<std::vector<bet_t>>(req_config);
+                bet_db.replace_trade(bets[i]);
+                std::vector<bet_t> read_bets = bet_db.get_trades<std::vector<bet_t>>(req_config);
                 std::cout << "read_bets size " << read_bets.size() << " i " << i << " k " << k << std::endl;
             }
         }
