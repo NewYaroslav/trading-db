@@ -93,7 +93,7 @@
 				<Option output="example-bet-db" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
-				<Option compiler="mingw_64_7_3_0" />
+				<Option compiler="mingw_64_12_2_0" />
 				<Compiler>
 					<Add option="-std=c++14" />
 					<Add option="-pg" />
@@ -207,10 +207,7 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="../../include/trading-db/bet-database.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
-		</Unit>
+		<Unit filename="../../include/trading-db/bo-trades-db.hpp" />
 		<Unit filename="../../include/trading-db/config.hpp" />
 		<Unit filename="../../include/trading-db/int-key-blob-value-database.hpp" />
 		<Unit filename="../../include/trading-db/key-value-database.hpp" />
@@ -258,11 +255,9 @@
 		<Unit filename="../../include/trading-db/parts/qdb-zstd.hpp">
 			<Option target="example-qdb-csv" />
 		</Unit>
+		<Unit filename="../../include/trading-db/payment-database.hpp" />
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
-		<Unit filename="../../include/trading-db/qdb.hpp">
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
+		<Unit filename="../../include/trading-db/qdb.hpp" />
 		<Unit filename="../../include/trading-db/tick-database.hpp" />
 		<Unit filename="../../include/trading-db/utility/async-tasks.hpp" />
 		<Unit filename="../../include/trading-db/utility/compact_candles_dataset.hpp" />
@@ -288,6 +283,8 @@
 		<Unit filename="../../lib/sqlite_orm/include/sqlite_orm/sqlite_orm.h" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.cpp" />
 		<Unit filename="../../lib/xtime_cpp/src/xtime.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/parts/ztime_definitions.hpp" />
+		<Unit filename="../../lib/ztime-cpp/src/parts/ztime_timer.hpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime.cpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime.hpp" />
 		<Unit filename="../../lib/ztime-cpp/src/ztime_ntp.hpp" />

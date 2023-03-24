@@ -160,8 +160,20 @@ namespace trading_db {
                     "CREATE TABLE IF NOT EXISTS 'meta-data' ("
                     "key                TEXT    PRIMARY KEY NOT NULL,"
                     "value              TEXT                NOT NULL)";
-            if (!utils::prepare(sqlite_db_ptr, create_bets_table_sql)) return false;
-            if (!utils::prepare(sqlite_db_ptr, create_meta_data_table_sql)) return false;
+
+            const size_t delay_per_attempt = 250;
+            const size_t attempts = 100;
+
+            for (size_t i = 1; i <= attempts; ++i) {
+                if (utils::prepare(sqlite_db_ptr, create_bets_table_sql)) break;
+                if (i == attempts) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_per_attempt));
+            }
+            for (size_t i = 1; i <= attempts; ++i) {
+                if (utils::prepare(sqlite_db_ptr, create_meta_data_table_sql)) break;
+                if (i == attempts) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_per_attempt));
+            }
             return true;
         }
 
@@ -384,12 +396,14 @@ namespace trading_db {
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
                     print_error("sqlite3_reset return code " + std::to_string(err), __LINE__);
+                    std::cout << "+++sqlite3_reset" << std::endl;
                     return T();
                 }
                 err = sqlite3_step(stmt.get());
                 if(err == SQLITE_DONE) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
+                    std::cout << "+++SQLITE_DONE" << std::endl;
                     return T();
                 } else
                 if(err == SQLITE_BUSY) {
@@ -402,6 +416,7 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     print_error("sqlite3_step return code " + std::to_string(err), __LINE__);
+                    std::cout << "+++SQLITE_ROW" << std::endl;
                     return T();
                 }
 
@@ -455,10 +470,14 @@ namespace trading_db {
                         break;
                     } else
                     if(err == SQLITE_BUSY) {
+                        std::cout << "++SQLITE_BUSY" << std::endl;
                         break;
                     }
                 }
                 if(err == SQLITE_BUSY) {
+
+                    std::cout << "+SQLITE_BUSY" << std::endl;
+
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     buffer.clear();
@@ -868,6 +887,9 @@ namespace trading_db {
             stmt.init(sqlite_db, request_str);
             // получаем данные
             T buffer(get_bets_db<T>(stmt));
+
+            std::cout << "+buffer.size " << buffer.size() << std::endl;
+
             // проводим оставшуюся фильтрацию
             size_t index = 0;
             while (index < buffer.size()) {
@@ -992,7 +1014,14 @@ namespace trading_db {
         inline bool remove_all() {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
-            return utils::prepare(sqlite_db, "DELETE FROM 'bets-data-v1'");
+            const size_t delay_per_attempt = 250;
+            const size_t attempts = 100;
+            for (size_t i = 1; i <= attempts; ++i) {
+                if (utils::prepare(sqlite_db, "DELETE FROM 'bets-data-v1'")) break;
+                if (i == attempts) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_per_attempt));
+            }
+            return true;
         }
 
         /** \brief Удалить сделку
@@ -1001,11 +1030,18 @@ namespace trading_db {
         inline bool remove_trade(const BoResult &bo_result) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
-            return utils::prepare(sqlite_db,
-                "DELETE FROM 'bets-data-v1' WHERE open_date == " +
-                std::to_string(bo_result.open_date) +
-                " AND uid == " +
-                std::to_string(bo_result.uid));
+            const size_t delay_per_attempt = 250;
+            const size_t attempts = 100;
+            for (size_t i = 1; i <= attempts; ++i) {
+                if (utils::prepare(sqlite_db,
+                    "DELETE FROM 'bets-data-v1' WHERE open_date == " +
+                    std::to_string(bo_result.open_date) +
+                    " AND uid == " +
+                    std::to_string(bo_result.uid))) break;
+                if (i == attempts) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_per_attempt));
+            }
+            return true;
         }
 
         /** \brief Удалить сделку по UID
@@ -1014,9 +1050,16 @@ namespace trading_db {
         inline bool remove_trade(const int64_t uid) noexcept {
             std::lock_guard<std::mutex> lock(method_mutex);
             if (!check_init_db()) return false;
-            return utils::prepare(sqlite_db,
-                "DELETE FROM 'bets-data-v1' WHERE uid == " +
-                std::to_string(uid));
+            const size_t delay_per_attempt = 250;
+            const size_t attempts = 100;
+            for (size_t i = 1; i <= attempts; ++i) {
+                if (utils::prepare(sqlite_db,
+                    "DELETE FROM 'bets-data-v1' WHERE uid == " +
+                    std::to_string(uid))) break;
+                if (i == attempts) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_per_attempt));
+            }
+            return true;
         }
 
         /** \brief Удалить значения по ключам
@@ -1033,7 +1076,15 @@ namespace trading_db {
                 message += *it;
             }
             message += ")";
-            return utils::prepare(sqlite_db, message);
+
+            const size_t delay_per_attempt = 250;
+            const size_t attempts = 100;
+            for (size_t i = 1; i <= attempts; ++i) {
+                if (utils::prepare(sqlite_db, message)) break;
+                if (i == attempts) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_per_attempt));
+            }
+            return true;
         }
 
         //----------------------------------------------------------------------
