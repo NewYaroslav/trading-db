@@ -17,6 +17,7 @@ namespace trading_db {
             std::vector<std::string>    currencies;
             bool                        real        = false;
             bool                        demo        = false;
+            int64_t                     time_zone = 0;
 
             std::vector<Stats>          currency_stats;
             std::vector<Stats>          signal_stats;
@@ -24,6 +25,11 @@ namespace trading_db {
             std::vector<Stats>          symbol_stats;
             std::vector<Stats>          hour_stats;
             std::vector<Stats>          weekday_stats;
+
+            class Config {
+            public:
+                int64_t time_zone = 0;
+            } config;
 
             MetaStats() {};
 
@@ -72,6 +78,7 @@ namespace trading_db {
 
                 for (size_t c = 0; c < currencies.size(); ++c) {
                     currency_stats[c].config.currency = currencies[c];
+                    currency_stats[c].config.time_zone = config.time_zone;
                     currency_stats[c].calc(bets, 0);
                 }
 
@@ -80,6 +87,7 @@ namespace trading_db {
                         return convert(value, from);
                     };
                     signal_stats[s].config.signals.push_back(signals[s]);
+                    signal_stats[s].config.time_zone = config.time_zone;
                     signal_stats[s].calc(bets, 0);
                 }
 
@@ -88,6 +96,7 @@ namespace trading_db {
                         return convert(value, from);
                     };
                     symbol_stats[s].config.symbols.push_back(symbols[s]);
+                    symbol_stats[s].config.time_zone = config.time_zone;
                     symbol_stats[s].calc(bets, 0);
                 }
 
@@ -97,6 +106,7 @@ namespace trading_db {
                     };
                     hour_stats[s].config.use_hour = true;
                     hour_stats[s].config.hour = s;
+                    hour_stats[s].config.time_zone = config.time_zone;
                     hour_stats[s].calc(bets, 0);
                 }
 
@@ -106,6 +116,7 @@ namespace trading_db {
                     };
                     weekday_stats[s].config.use_weekday = true;
                     weekday_stats[s].config.weekday = s;
+                    weekday_stats[s].config.time_zone = config.time_zone;
                     weekday_stats[s].calc(bets, 0);
                 }
 
@@ -114,6 +125,7 @@ namespace trading_db {
                         return convert(value, from);
                     };
                     broker_stats[b].config.brokers.push_back(brokers[b]);
+                    broker_stats[b].config.time_zone = config.time_zone;
                     broker_stats[b].calc(bets, 0);
                 }
             }

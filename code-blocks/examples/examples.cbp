@@ -224,6 +224,9 @@
 			<Option target="example-bet-db" />
 			<Option target="example-bet-db-generation-test-trades" />
 		</Unit>
+		<Unit filename="../../include/trading-db/parts/bo-trades-db/common.hpp" />
+		<Unit filename="../../include/trading-db/parts/bo-trades-db/meta-stats.hpp" />
+		<Unit filename="../../include/trading-db/parts/bo-trades-db/stats.hpp" />
 		<Unit filename="../../include/trading-db/parts/files.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb-common.hpp">
 			<Option target="example-qdb-price-buffer" />
@@ -255,18 +258,24 @@
 		<Unit filename="../../include/trading-db/parts/qdb-zstd.hpp">
 			<Option target="example-qdb-csv" />
 		</Unit>
+		<Unit filename="../../include/trading-db/parts/qdb/compact-candles-dataset.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/compact-dataset.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/compact-ticks-dataset.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/data-classes.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/data-preparation.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/dictionary-candles.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/dictionary-ticks.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/enums.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/price-buffer.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/storage.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/writer-price-buffer.hpp" />
+		<Unit filename="../../include/trading-db/parts/qdb/zstd.hpp" />
 		<Unit filename="../../include/trading-db/payment-database.hpp" />
 		<Unit filename="../../include/trading-db/proxy-database.hpp" />
 		<Unit filename="../../include/trading-db/qdb.hpp" />
 		<Unit filename="../../include/trading-db/tick-database.hpp" />
-		<Unit filename="../../include/trading-db/utility/async-tasks.hpp" />
-		<Unit filename="../../include/trading-db/utility/compact_candles_dataset.hpp" />
-		<Unit filename="../../include/trading-db/utility/compact_ticks_dataset.hpp" />
-		<Unit filename="../../include/trading-db/utility/files.hpp" />
-		<Unit filename="../../include/trading-db/utility/print.hpp" />
-		<Unit filename="../../include/trading-db/utility/protection.hpp" />
-		<Unit filename="../../include/trading-db/utility/safe-queue.hpp" />
-		<Unit filename="../../include/trading-db/utility/sqlite-func.hpp" />
+		<Unit filename="../../include/trading-db/tools/qdb/csv.hpp" />
+		<Unit filename="../../include/trading-db/tools/qdb/history.hpp" />
 		<Unit filename="../../include/trading-db/utils/async-tasks.hpp" />
 		<Unit filename="../../include/trading-db/utils/files.hpp" />
 		<Unit filename="../../include/trading-db/utils/print.hpp" />

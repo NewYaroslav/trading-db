@@ -259,6 +259,7 @@ namespace trading_db {
 
 				int							stats_type	= StatsTypes::ALL_BET;	///	 Тип статистики (первая сделка, последняя, все сделки)
 
+				int64_t time_zone = 0;
 			} config;
 
 			// общая статистика
@@ -378,20 +379,22 @@ namespace trading_db {
 					total_sell_stats.win();
 				}
 
-				stats_year[ztime::start_of_year(timestamp)].win();
-				stats_month[ztime::get_month(timestamp)].win();
-				stats_day_month[ztime::get_day_month(timestamp)].win();
-				stats_hour_day[ztime::get_hour_day(timestamp)].win();
-				stats_minute_day[ztime::get_minute_day(timestamp)].win();
-				stats_week_day[ztime::get_weekday(timestamp)].win();
+				const auto &t = timestamp;
 
-				if (counter_bet_timestamp == 0) counter_bet_timestamp = ztime::get_first_timestamp_minute(timestamp);
+				stats_year[ztime::start_of_year(t)].win();
+				stats_month[ztime::get_month(t)].win();
+				stats_day_month[ztime::get_day_month(t)].win();
+				stats_hour_day[ztime::get_hour_day(t)].win();
+				stats_minute_day[ztime::get_minute_day(t)].win();
+				stats_week_day[ztime::get_weekday(t)].win();
 
-				if (counter_bet_timestamp == ztime::get_first_timestamp_minute(timestamp)) {
+				if (counter_bet_timestamp == 0) counter_bet_timestamp = ztime::get_first_timestamp_minute(t);
+
+				if (counter_bet_timestamp == ztime::get_first_timestamp_minute(t)) {
 					stats_temp_counter_bet.win();
 					++counter_bet;
 				} else {
-					counter_bet_timestamp = ztime::get_first_timestamp_minute(timestamp);
+					counter_bet_timestamp = ztime::get_first_timestamp_minute(t);
 					stats_counter_bet[counter_bet] = stats_temp_counter_bet;
 					stats_temp_counter_bet.clear();
 					stats_temp_counter_bet.win();
@@ -413,20 +416,22 @@ namespace trading_db {
 					total_sell_stats.loss();
 				}
 
-				stats_year[ztime::start_of_year(timestamp)].loss();
-				stats_month[ztime::get_month(timestamp)].loss();
-				stats_day_month[ztime::get_day_month(timestamp)].loss();
-				stats_hour_day[ztime::get_hour_day(timestamp)].loss();
-				stats_minute_day[ztime::get_minute_day(timestamp)].loss();
-				stats_week_day[ztime::get_weekday(timestamp)].loss();
+				const auto &t = timestamp;
 
-				if (counter_bet_timestamp == 0) counter_bet_timestamp = ztime::get_first_timestamp_minute(timestamp);
+				stats_year[ztime::start_of_year(t)].loss();
+				stats_month[ztime::get_month(t)].loss();
+				stats_day_month[ztime::get_day_month(t)].loss();
+				stats_hour_day[ztime::get_hour_day(t)].loss();
+				stats_minute_day[ztime::get_minute_day(t)].loss();
+				stats_week_day[ztime::get_weekday(t)].loss();
 
-				if (counter_bet_timestamp == ztime::get_first_timestamp_minute(timestamp)) {
+				if (counter_bet_timestamp == 0) counter_bet_timestamp = ztime::get_first_timestamp_minute(t);
+
+				if (counter_bet_timestamp == ztime::get_first_timestamp_minute(t)) {
 					stats_temp_counter_bet.loss();
 					++counter_bet;
 				} else {
-					counter_bet_timestamp = ztime::get_first_timestamp_minute(timestamp);
+					counter_bet_timestamp = ztime::get_first_timestamp_minute(t);
 					stats_counter_bet[counter_bet] = stats_temp_counter_bet;
 					stats_temp_counter_bet.clear();
 					stats_temp_counter_bet.loss();
@@ -448,20 +453,22 @@ namespace trading_db {
 					total_sell_stats.standoff();
 				}
 
-				stats_year[ztime::start_of_year(timestamp)].standoff();
-				stats_month[ztime::get_month(timestamp)].standoff();
-				stats_day_month[ztime::get_day_month(timestamp)].standoff();
-				stats_hour_day[ztime::get_hour_day(timestamp)].standoff();
-				stats_minute_day[ztime::get_minute_day(timestamp)].standoff();
-				stats_week_day[ztime::get_weekday(timestamp)].standoff();
+				const auto &t = timestamp;
 
-				if (counter_bet_timestamp == 0) counter_bet_timestamp = ztime::get_first_timestamp_minute(timestamp);
+				stats_year[ztime::start_of_year(t)].standoff();
+				stats_month[ztime::get_month(t)].standoff();
+				stats_day_month[ztime::get_day_month(t)].standoff();
+				stats_hour_day[ztime::get_hour_day(t)].standoff();
+				stats_minute_day[ztime::get_minute_day(t)].standoff();
+				stats_week_day[ztime::get_weekday(t)].standoff();
 
-				if (counter_bet_timestamp == ztime::get_first_timestamp_minute(timestamp)) {
+				if (counter_bet_timestamp == 0) counter_bet_timestamp = ztime::get_first_timestamp_minute(t);
+
+				if (counter_bet_timestamp == ztime::get_first_timestamp_minute(t)) {
 					stats_temp_counter_bet.standoff();
 					++counter_bet;
 				} else {
-					counter_bet_timestamp = ztime::get_first_timestamp_minute(timestamp);
+					counter_bet_timestamp = ztime::get_first_timestamp_minute(t);
 					stats_counter_bet[counter_bet] = stats_temp_counter_bet;
 					stats_temp_counter_bet.clear();
 					stats_temp_counter_bet.standoff();
@@ -635,8 +642,8 @@ namespace trading_db {
 					if (!bet.demo && !config.use_real) continue;
 					if (bet.amount == 0) continue;
 
-					const ztime::timestamp_t timestamp = ztime::ms_to_sec(bet.open_date);
-					const ztime::timestamp_t end_timestamp = ztime::ms_to_sec(bet.close_date);
+					const ztime::timestamp_t timestamp = ztime::ms_to_sec(bet.open_date) + config.time_zone;
+					const ztime::timestamp_t end_timestamp = ztime::ms_to_sec(bet.close_date) + config.time_zone;
 					const ztime::timestamp_t first_timestamp_day = ztime::start_of_day(timestamp);
 
 					const size_t second = ztime::get_second_minute(timestamp);
