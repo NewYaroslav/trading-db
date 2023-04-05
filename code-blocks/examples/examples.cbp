@@ -212,52 +212,9 @@
 		<Unit filename="../../include/trading-db/int-key-blob-value-database.hpp" />
 		<Unit filename="../../include/trading-db/key-value-database.hpp" />
 		<Unit filename="../../include/trading-db/list-database.hpp" />
-		<Unit filename="../../include/trading-db/parts/bet-database-common.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/bet-database-meta-stats.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/bet-database-stats.hpp">
-			<Option target="example-bet-db" />
-			<Option target="example-bet-db-generation-test-trades" />
-		</Unit>
 		<Unit filename="../../include/trading-db/parts/bo-trades-db/common.hpp" />
 		<Unit filename="../../include/trading-db/parts/bo-trades-db/meta-stats.hpp" />
 		<Unit filename="../../include/trading-db/parts/bo-trades-db/stats.hpp" />
-		<Unit filename="../../include/trading-db/parts/files.hpp" />
-		<Unit filename="../../include/trading-db/parts/qdb-common.hpp">
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-compact-candles-dataset.hpp">
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-compact-dataset.hpp">
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-compact-ticks-dataset.hpp">
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-csv.hpp">
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-price-buffer.hpp">
-			<Option target="example-qdb-price-buffer" />
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-storage.hpp">
-			<Option target="example-qdb-price-buffer" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-writer-price-buffer.hpp">
-			<Option target="example-qdb-csv" />
-		</Unit>
-		<Unit filename="../../include/trading-db/parts/qdb-zstd.hpp">
-			<Option target="example-qdb-csv" />
-		</Unit>
 		<Unit filename="../../include/trading-db/parts/qdb/compact-candles-dataset.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb/compact-dataset.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb/compact-ticks-dataset.hpp" />

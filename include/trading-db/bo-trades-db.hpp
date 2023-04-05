@@ -396,14 +396,12 @@ namespace trading_db {
             while (true) {
                 if ((err = sqlite3_reset(stmt.get())) != SQLITE_OK) {
                     print_error("sqlite3_reset return code " + std::to_string(err), __LINE__);
-                    std::cout << "+++sqlite3_reset" << std::endl;
                     return T();
                 }
                 err = sqlite3_step(stmt.get());
                 if(err == SQLITE_DONE) {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
-                    std::cout << "+++SQLITE_DONE" << std::endl;
                     return T();
                 } else
                 if(err == SQLITE_BUSY) {
@@ -416,7 +414,6 @@ namespace trading_db {
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     print_error("sqlite3_step return code " + std::to_string(err), __LINE__);
-                    std::cout << "+++SQLITE_ROW" << std::endl;
                     return T();
                 }
 
@@ -470,14 +467,10 @@ namespace trading_db {
                         break;
                     } else
                     if(err == SQLITE_BUSY) {
-                        std::cout << "++SQLITE_BUSY" << std::endl;
                         break;
                     }
                 }
                 if(err == SQLITE_BUSY) {
-
-                    std::cout << "+SQLITE_BUSY" << std::endl;
-
                     sqlite3_reset(stmt.get());
                     sqlite3_clear_bindings(stmt.get());
                     buffer.clear();
@@ -887,8 +880,6 @@ namespace trading_db {
             stmt.init(sqlite_db, request_str);
             // получаем данные
             T buffer(get_bets_db<T>(stmt));
-
-            std::cout << "+buffer.size " << buffer.size() << std::endl;
 
             // проводим оставшуюся фильтрацию
             size_t index = 0;
