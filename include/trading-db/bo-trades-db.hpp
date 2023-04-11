@@ -836,6 +836,9 @@ namespace trading_db {
             bool use_demo        = true;                /// Использовать сделки на DEMO
             bool use_real        = true;                /// Использовать сделки на REAL
 
+            bool use_fix_status = true;
+            uint32_t wait_status = 30;
+
         };
 
         /** \brief Получить данные из БД
@@ -969,6 +972,36 @@ namespace trading_db {
                     continue;
                 }
                 ++index;
+            }
+
+            if (request.use_fix_status) {
+                // получаем последнюю дату
+                int64_t max_date = 0;
+                for (auto &item : buffer) {
+                    if (item.status != BoStatus::WIN &&
+                        item.status != BoStatus::LOSS &&
+                        item.status != BoStatus::STANDOFF) {
+                        continue;
+                    }
+                    max_date = std::max(max_date, item.close_date);
+                }
+                if (max_date != 0) {
+                    max_date -= ztime::sec_to_ms(request.wait_status);
+                    for (auto &item : buffer) {
+                        if (item.status != BoStatus::WAITING_COMPLETION &&
+                            item.status != BoStatus::UPDATE) {
+                            continue;
+                        }
+                        if (item.close_date && max_date > item.close_date) {
+                            item.status = BoStatus::CHECK_ERROR;
+                            continue;
+                        }
+                        if (item.open_date && item.duration && max_date > (item.open_date + ztime::sec_to_ms(item.duration))) {
+                            item.status = BoStatus::CHECK_ERROR;
+                            continue;
+                        }
+                    }
+                }
             }
             return std::move(buffer);
         }
