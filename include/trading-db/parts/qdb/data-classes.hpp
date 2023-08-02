@@ -111,23 +111,23 @@ namespace trading_db {
 	public:
 		double		bid;
 		double		ask;
-		uint64_t	timestamp_ms;
+		uint64_t	t_ms;
 
 		Tick() :
 			bid(0),
 			ask(0),
-			timestamp_ms(0) {
+			t_ms(0) {
 		};
 
-		Tick(	const double &new_bid,
-				const double &new_ask,
-				const uint64_t &new_timestamp_ms) :
-			bid(new_bid),
-			ask(new_ask),
-			timestamp_ms(new_timestamp_ms) {}
+		Tick(	const double &arg_bid,
+				const double &arg_ask,
+				const uint64_t &arg_t_ms) :
+			bid(arg_bid),
+			ask(arg_ask),
+			t_ms(arg_t_ms) {}
 
 		bool empty() const noexcept {
-			return (timestamp_ms == 0);
+			return (t_ms == 0);
 		}
 	}; // Tick
 

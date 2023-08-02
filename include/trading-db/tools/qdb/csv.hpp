@@ -94,7 +94,7 @@ namespace trading_db {
 					else flag = 6;
 				}
 
-				tick.timestamp_ms = change_timezone_ms(ztime::to_timestamp_ms(elemets[0] + " " + elemets[1]));
+				tick.t_ms = change_timezone_ms(ztime::to_timestamp_ms(elemets[0] + " " + elemets[1]));
 
 				switch (flag) {
 				case 2:

@@ -464,25 +464,25 @@ namespace trading_db {
 			return init_db(path, readonly);
 		}
 
-		inline bool get_min_max_date(const bool use_tick_data, uint64_t &t_min, uint64_t &t_max) {
+		inline bool get_min_max_date(const bool is_tick_data, uint64_t &min_date, uint64_t &max_date) {
 			utils::SqliteStmt stmt_min;
 			utils::SqliteStmt stmt_max;
-			if (use_tick_data) {
+			if (is_tick_data) {
 				stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.tick_table + "'");
 				stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.tick_table + "'");
-				if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
-					t_max += ztime::SEC_PER_HOUR;
+				if (get_uint64_value(stmt_min, min_date) && get_uint64_value(stmt_max, max_date)) {
+					max_date += ztime::SEC_PER_HOUR;
 					return true;
 				}
 			} else {
 				stmt_min.init(sqlite_db, "SELECT MIN(key) as min FROM '" + config.candle_table + "'");
 				stmt_max.init(sqlite_db, "SELECT MAX(key) as max FROM '" + config.candle_table + "'");
-				if (get_uint64_value(stmt_min, t_min) && get_uint64_value(stmt_max, t_max)) {
-					t_max += ztime::SEC_PER_HOUR;
+				if (get_uint64_value(stmt_min, min_date) && get_uint64_value(stmt_max, max_date)) {
+					max_date += ztime::SEC_PER_HOUR;
 					return true;
 				}
 			}
-			t_min = t_max = 0;
+			min_date = max_date = 0;
 			return false;
 		}
 

@@ -75,7 +75,7 @@ namespace trading_db {
 		}
 
 		void write(const Tick &tick) {
-			const uint64_t timestamp_hour = ztime::start_of_hour_sec(tick.timestamp_ms);
+			const uint64_t timestamp_hour = ztime::start_of_hour_sec(tick.t_ms);
 			if (timestamp_hour != time_ticks_buffer) {
 				if (time_ticks_buffer) {
 					if (on_ticks) on_ticks(ticks_buffer, time_ticks_buffer);
@@ -83,7 +83,7 @@ namespace trading_db {
 				}
 				time_ticks_buffer = timestamp_hour;
 			}
-			ticks_buffer[tick.timestamp_ms] = ShortTick(tick.bid, tick.ask);
+			ticks_buffer[tick.t_ms] = ShortTick(tick.bid, tick.ask);
 		}
 
 	};

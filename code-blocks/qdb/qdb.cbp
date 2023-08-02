@@ -417,6 +417,73 @@
 					<Add directory="../../lib" />
 				</Linker>
 			</Target>
+			<Target title="qdb-fx-history">
+				<Option output="qdb-fx-history" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+				</Linker>
+			</Target>
+			<Target title="qdb-fx-symbols">
+				<Option output="qdb-fx-symbols" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="mingw_64_7_3_0" />
+				<Compiler>
+					<Add option="-std=c++14" />
+					<Add option="-pg" />
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DSQLITE_THREADSAFE=1" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+					<Add directory="../../lib/googletest/googletest/include" />
+				</Compiler>
+				<Linker>
+					<Add option="-pg -lgmon" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+					<Add library="zstd" />
+					<Add library="gtest" />
+					<Add directory="../../lib/sqlite_orm/include" />
+					<Add directory="../../lib/sqlite-amalgamation-3340100" />
+					<Add directory="../../lib/ztime-cpp/src" />
+					<Add directory="../../lib/zstd/lib" />
+					<Add directory="../../include" />
+					<Add directory="../../lib" />
+					<Add directory="../../lib/googletest/build/lib" />
+				</Linker>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -435,6 +502,8 @@
 		<Unit filename="../../include/trading-db/parts/qdb/writer-price-buffer.hpp" />
 		<Unit filename="../../include/trading-db/parts/qdb/zstd.hpp" />
 		<Unit filename="../../include/trading-db/qdb.hpp" />
+		<Unit filename="../../include/trading-db/tools/qdb/fx-history.hpp" />
+		<Unit filename="../../include/trading-db/tools/qdb/fx-symbols-db.hpp" />
 		<Unit filename="../../include/trading-db/utils/-compact_candles_dataset.hpp" />
 		<Unit filename="../../include/trading-db/utils/-compact_ticks_dataset.hpp" />
 		<Unit filename="../../include/trading-db/utils/async-tasks.hpp" />
@@ -482,6 +551,12 @@
 		</Unit>
 		<Unit filename="price-buffer.cpp">
 			<Option target="price-buffer" />
+		</Unit>
+		<Unit filename="qdb-fx-history.cpp">
+			<Option target="qdb-fx-history" />
+		</Unit>
+		<Unit filename="qdb-fx-symbols.cpp">
+			<Option target="qdb-fx-symbols" />
 		</Unit>
 		<Unit filename="qdb-history.cpp">
 			<Option target="qdb-history" />

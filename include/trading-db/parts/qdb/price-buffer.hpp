@@ -23,8 +23,8 @@ namespace trading_db {
 
 		class Config {
 		public:
-			uint64_t tick_start	        = ztime::SEC_PER_DAY;		    /**< Количество секунд данных для загрузки в буфер до метки времени */
-			uint64_t tick_stop	        = ztime::SEC_PER_DAY;		    /**< Количество секунд данных для загрузки в буфер после метки времени */
+			uint64_t tick_start	        = ztime::SEC_PER_HOUR;		    /**< Количество секунд данных для загрузки в буфер до метки времени */
+			uint64_t tick_stop	        = ztime::SEC_PER_HOUR;		    /**< Количество секунд данных для загрузки в буфер после метки времени */
 			uint64_t tick_deadtime      = ztime::SEC_PER_MIN;	        /**< Максимальное время отсутствия тиков */
 			uint64_t candle_start	    = 10 * ztime::SEC_PER_DAY;
 			uint64_t candle_stop	    = 10 * ztime::SEC_PER_DAY;
@@ -55,11 +55,11 @@ namespace trading_db {
 		std::map<uint64_t, ticks_hour> tick_buffer;
 
 		void write_tick_buffer(const Tick &tick) noexcept {
-			const uint64_t time_hour = ztime::start_of_hour_sec(tick.timestamp_ms);
+			const uint64_t time_hour = ztime::start_of_hour_sec(tick.t_ms);
 			ShortTick short_tick;
 			short_tick.ask = tick.ask;
 			short_tick.bid = tick.bid;
-			tick_buffer[time_hour][tick.timestamp_ms] = short_tick;
+			tick_buffer[time_hour][tick.t_ms] = short_tick;
 		}
 
 		void read_tick_buffer(const uint64_t t_ms) noexcept {
@@ -155,7 +155,7 @@ namespace trading_db {
 
 				tick.ask = it_last->second.ask;
 				tick.bid = it_last->second.bid;
-				tick.timestamp_ms = it_last->first;
+				tick.t_ms = it_last->first;
 			} else {
 
 				// проверяем мертвое время
@@ -164,7 +164,7 @@ namespace trading_db {
 
 				tick.ask = it_tick->second.ask;
 				tick.bid = it_tick->second.bid;
-				tick.timestamp_ms = it_tick->first;
+				tick.t_ms = it_tick->first;
 			}
 			return true;
 		}
@@ -194,11 +194,11 @@ namespace trading_db {
 
 				tick.ask = it_first->second.ask;
 				tick.bid = it_first->second.bid;
-				tick.timestamp_ms = it_first->first;
+				tick.t_ms = it_first->first;
 			} else {
 				tick.ask = it_tick->second.ask;
 				tick.bid = it_tick->second.bid;
-				tick.timestamp_ms = it_tick->first;
+				tick.t_ms = it_tick->first;
 			}
 			return true;
 		}
@@ -206,6 +206,300 @@ namespace trading_db {
 		bool get_ticks_buffer(std::vector<Tick> &ticks, const uint64_t t_ms_start, const uint64_t t_ms_stop) noexcept {
 			const uint64_t start_time = ztime::start_of_hour_sec(t_ms_start);
 			const uint64_t stop_time = ztime::start_of_hour_sec(t_ms_stop);
+
+			auto it_start = tick_buffer.find(start_time);
+			if (it_start == tick_buffer.end() || it_start->second.empty()) {
+
+				// проверяем, есть ли данные в буфере
+				if (it_start == tick_buffer.begin()) return false;
+				auto it_prev = it_start;
+
+				while (it_prev != tick_buffer.begin()) {
+					// получаем предыдущий час тиков
+					it_prev = std::prev(it_prev);
+					// проверяем наличие данных в буфере
+					if (!it_prev->second.empty()) break;
+				}
+				if (it_prev->second.empty()) return false;
+
+				// находим последний тик предыдущего часа
+				auto it_last = std::prev(it_prev->second.end());
+
+				Tick tick;
+				tick.ask = it_last->second.ask;
+				tick.bid = it_last->second.bid;
+				tick.t_ms = it_last->first;
+				ticks.push_back(tick);
+
+				it_prev++;
+				it_start = it_prev;
+				if (it_start == tick_buffer.end()) return true;
+			}
+
+			auto it_stop = tick_buffer.find(stop_time);
+			if (it_stop == tick_buffer.end() || it_stop->second.empty()) {
+
+				// проверяем, есть ли данные в буфере
+				if (it_stop == tick_buffer.begin()) {
+					if (ticks.empty()) return false;
+					return true;
+				}
+				auto it_prev = it_stop;
+
+				while (it_prev != tick_buffer.begin()) {
+					// получаем предыдущий час тиков
+					it_prev = std::prev(it_prev);
+					// проверяем наличие данных в буфере
+					if (!it_prev->second.empty()) break;
+				}
+
+				if (it_prev->second.empty()) {
+					if (ticks.empty()) return false;
+					return true;
+				}
+
+				// находим последний тик предыдущего часа
+				auto it_last = std::prev(it_prev->second.end());
+
+				Tick tick;
+				tick.ask = it_last->second.ask;
+				tick.bid = it_last->second.bid;
+				tick.t_ms = it_last->first;
+
+				if (!ticks.empty() && tick.t_ms <= ticks.back().t_ms) return true;
+				it_stop = it_prev;
+			}
+
+			if (it_start == it_stop) {
+				auto &buff = it_start->second;
+				auto it_begin = lower_bound_dec(buff, t_ms_start);
+
+				if (it_begin == buff.end()) {
+					// данных нет в буфере, ищем буфером ниже
+
+					// проверяем, есть ли данные в буфере
+					if (it_start == tick_buffer.begin()) return false;
+					auto it_prev = it_start;
+
+					while (it_prev != tick_buffer.begin()) {
+						// получаем предыдущий час тиков
+						it_prev = std::prev(it_prev);
+						// проверяем наличие данных в буфере
+						if (!it_prev->second.empty()) break;
+					}
+					if (it_prev->second.empty()) return false;
+					// находим последний тик предыдущего часа
+					auto it_last = std::prev(it_prev->second.end());
+
+					Tick tick;
+					tick.ask = it_last->second.ask;
+					tick.bid = it_last->second.bid;
+					tick.t_ms = it_last->first;
+					ticks.push_back(tick);
+
+					it_begin = buff.begin();
+				}
+				auto it_end = lower_bound_dec(buff, t_ms_stop);
+				if (it_end == buff.end()) return false;
+
+				++it_end;
+				for (auto it_tick = it_begin; it_tick != it_end; ++it_tick) {
+					Tick tick;
+					tick.ask = it_tick->second.ask;
+					tick.bid = it_tick->second.bid;
+					tick.t_ms = it_tick->first;
+					ticks.push_back(tick);
+				}
+			} else {
+				++it_stop;
+
+				for (auto it = it_start; it != it_stop; ++it) {
+					auto &buff = it->second;
+					if (it == it_start) {
+						auto it_begin = lower_bound_dec(buff, t_ms_start);
+						if (it_begin == buff.end()) {
+							// данных нет в буфере, ищем буфером ниже
+
+							// проверяем, есть ли данные в буфере
+							if (it_start == tick_buffer.begin()) return false;
+							auto it_prev = it_start;
+
+							while (it_prev != tick_buffer.begin()) {
+								// получаем предыдущий час тиков
+								it_prev = std::prev(it_prev);
+								// проверяем наличие данных в буфере
+								if (!it_prev->second.empty()) break;
+							}
+							if (it_prev->second.empty()) return false;
+							// находим последний тик предыдущего часа
+							auto it_last = std::prev(it_prev->second.end());
+
+							Tick tick;
+							tick.ask = it_last->second.ask;
+							tick.bid = it_last->second.bid;
+							tick.t_ms = it_last->first;
+							ticks.push_back(tick);
+							continue;
+						}
+
+						for (auto it_tick = it_begin; it_tick != buff.end(); ++it_tick) {
+							Tick tick;
+							tick.ask = it_tick->second.ask;
+							tick.bid = it_tick->second.bid;
+							tick.t_ms = it_tick->first;
+							ticks.push_back(tick);
+						}
+					} else
+					if (it == it_stop) {
+						auto it_end = lower_bound_dec(buff, t_ms_stop);
+						if (it_end == buff.end()) return false;
+						++it_end;
+						for (auto it_tick = buff.begin(); it_tick != it_end; ++it_tick) {
+							Tick tick;
+							tick.ask = it_tick->second.ask;
+							tick.bid = it_tick->second.bid;
+							tick.t_ms = it_tick->first;
+							ticks.push_back(tick);
+						}
+					} else {
+						for (auto it_tick = buff.begin(); it_tick != buff.end(); ++it_tick) {
+							Tick tick;
+							tick.ask = it_tick->second.ask;
+							tick.bid = it_tick->second.bid;
+							tick.t_ms = it_tick->first;
+							ticks.push_back(tick);
+						}
+					}
+				}
+			}
+			return true;
+		}
+
+		/*
+		bool get_ticks_buffer_v2(std::vector<Tick> &ticks, const size_t num_ticks, const uint64_t t_ms, const uint64_t min_date, const uint64_t max_date) noexcept {
+			uint64_t buffer_time = ztime::start_of_hour_sec(t_ms);
+			if (buffer_time >= max_date) return false;
+            if (buffer_time < min_date) return false;
+
+            //{ Получаем данные из буфера
+            auto it_buffer = tick_buffer.find(buffer_time);
+            if (it_buffer == tick_buffer.end()) {
+                tick_buffer[buffer_time] = on_read_ticks(buffer_time);
+                it_buffer = tick_buffer.find(buffer_time);
+                if (it_buffer == tick_buffer.end()) return false;
+            }
+            //}
+
+            //{ чистим буферы после it_buffer
+            const std::ptrdiff_t max_distance = std::max((std::ptrdiff_t)(config.tick_stop / ztime::SEC_PER_HOUR), std::ptrdiff_t(1));
+            if (std::distance(it_buffer, tick_buffer.end()) > max_distance) {
+                auto it_remove = std::next(it_buffer, max_distance);
+                while (it_remove != tick_buffer.end()) {
+                    it_remove = tick_buffer.erase(it_remove);
+                }
+            }
+            //}
+
+            //{ Загружаем буферы от t_ms
+            const uint64_t last_time = std::prev(tick_buffer.end())->first + ztime::SEC_PER_HOUR;
+            for (uint64_t read_time = last_time; read_time < max_date; read_time += ztime::SEC_PER_HOUR) {
+                tick_buffer[buffer_time] = on_read_ticks(buffer_time);
+            }
+            //}
+
+            //{ внутри первого элемента буфера
+            while (!it_buffer->second.empty()) {
+                auto &buffer = it_buffer->second;
+                auto it_end = lower_bound_dec(buffer, t_ms);
+                if (it_end == buffer.end()) break;
+                // в буфере есть искомый тик
+                if ((std::distance(buffer.begin(), it_end) + 1) >= num_ticks) {
+                    auto it_begin = std::prev(it_end, num_ticks);
+                    for (auto it = it_begin; it < it_end; ++it) {
+                        Tick tick;
+                        tick.ask = it->second.ask;
+                        tick.bid = it->second.bid;
+                        tick.timestamp_ms = it->first;
+                        ticks.push_back(tick);
+                    }
+                    //{ чистим буферы после it_buffer
+                    const std::ptrdiff_t max_distance = std::max((std::ptrdiff_t)(config.tick_start / ztime::SEC_PER_HOUR), 1);
+                    if (std::distance(it_buffer, tick_buffer.end()) > max_distance) {
+                        auto it_remove = std::next(it_buffer, max_distance);
+                        while (it_remove != tick_buffer.end()) {
+                            it_remove = tick_buffer.erase(it_remove);
+                        }
+                    }
+                    //}
+
+                    return true;
+                } else {
+
+                }
+                break;
+            }
+            //}
+
+            while (!false) {
+                // если в буфере нет данных, грузим данные
+                if (it_buffer == tick_buffer.end()) {
+                    tick_buffer[buffer_time] = on_read_ticks(buffer_time);
+                    it_buffer = tick_buffer.find(buffer_time);
+                    if (it_buffer == tick_buffer.end()) return false;
+                }
+                // если данные пустые, смотрим предыдущие данные
+                while (it_buffer->second.empty()) {
+                    if (it_buffer == tick_buffer.begin()) {
+                        // если попали в начало данных, грузим новые
+                        buffer_time -= ztime::SEC_PER_HOUR;
+                        if (buffer_time < min_date) return false;
+                        tick_buffer[buffer_time] = on_read_ticks(buffer_time);
+                        it_buffer = tick_buffer.find(buffer_time);
+                    } else {
+                        it_buffer = std::prev(it_buffer);
+                        buffer_time = it_buffer->first;
+                        if (buffer_time < min_date) return false;
+                    }
+                    continue;
+                }
+                // данные получены
+                auto &buff = it_buffer->second;
+                auto it_begin = lower_bound_dec(buff, t_ms_start);
+
+                if (it_prev->second.size() >= num_ticks) {
+
+                }
+
+            }
+
+
+			if (it_stop == tick_buffer.end() || it_stop->second.empty()) {
+                // проверяем, есть ли данные в буфере
+				if (it_stop == tick_buffer.begin()) return false;
+				auto it_prev = it_stop;
+
+				while (it_prev != tick_buffer.begin()) {
+					// получаем предыдущий час тиков
+					it_prev = std::prev(it_prev);
+					// проверяем наличие данных в буфере
+					if (!it_prev->second.empty()) break;
+				}
+				if (it_prev->second.empty()) return false;
+
+				// находим последний тик предыдущего часа
+				auto it_last = std::prev(it_prev->second.end());
+
+				Tick tick;
+				tick.ask = it_last->second.ask;
+				tick.bid = it_last->second.bid;
+				tick.timestamp_ms = it_last->first;
+				ticks.push_back(tick);
+			} else {
+                auto &buff = it_start->second;
+				auto it_begin = lower_bound_dec(buff, t_ms_start);
+
+			}
+
 
 			auto it_start = tick_buffer.find(start_time);
 			if (it_start == tick_buffer.end() || it_start->second.empty()) {
@@ -374,6 +668,7 @@ namespace trading_db {
 			}
 			return true;
 		}
+		*/
 
 		// bar data per day
 		using candles_day = std::array<Candle, ztime::MIN_PER_DAY>;
@@ -472,7 +767,7 @@ namespace trading_db {
 					return false;
 				}
 				if (config.candle_deadtime) {
-					const int64_t deadtime = ((int64_t)time_stop_ms - (int64_t)ticks.back().timestamp_ms) / (int64_t)ztime::MS_PER_SEC;
+					const int64_t deadtime = ((int64_t)time_stop_ms - (int64_t)ticks.back().t_ms) / (int64_t)ztime::MS_PER_SEC;
 					if (deadtime > (int64_t)config.candle_deadtime) return false;
 				}
 

@@ -16,3 +16,6 @@
 [submodule "lib/zstd"]
 	path = lib/zstd
 	url = https://github.com/facebook/zstd.git
+[submodule "lib/googletest"]
+	path = lib/googletest
+	url = https://github.com/google/googletest.git

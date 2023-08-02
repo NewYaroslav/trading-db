@@ -28,6 +28,7 @@ namespace trading_db {
 			double						tick_period			= 1.0;		/**< Период тиков внутри бара (в секундах) */
 			uint64_t					timeframe			= 60.0;		/**< Таймфрейм исторических данных (в секундах) */
 			bool						use_new_tick_mode	= false;	/**< Режим "новый тик" разрешает событие on_test только при наступлении нового тика */
+			QDB_PRICE_MODE				trade_price_mode 	= QDB_PRICE_MODE::AVG_PRICE;
 
 			std::vector<TimePeriod>		trade_period;					/**< Периоды торговли */
 
@@ -231,17 +232,29 @@ namespace trading_db {
 			if (symbols_db[signal.s_index]->get_tick_ms(open_tick, open_time_ms) &&
 				symbols_db[signal.s_index]->get_tick_ms(close_tick, close_time_ms)) {
 
-				result.open_price = open_tick.bid;
-				result.close_price = close_tick.bid;
+				switch(local_config.trade_price_mode) {
+				case QDB_PRICE_MODE::AVG_PRICE:
+					result.open_price = (open_tick.bid + open_tick.ask) / 2.0;
+					result.close_price = (close_tick.bid + close_tick.ask) / 2.0;
+					break;
+				case QDB_PRICE_MODE::BID_PRICE:
+					result.open_price = open_tick.bid;
+					result.close_price = close_tick.bid;
+					break;
+				case QDB_PRICE_MODE::ASK_PRICE:
+					result.open_price = open_tick.ask;
+					result.close_price = close_tick.ask;
+					break;
+				};
 
 				if (signal.up) {
-					if (open_tick.bid < close_tick.bid) { // WIN
+					if (result.open_price < result.close_price) { // WIN
 					   result.win = true;
 					}
 					result.ok = true;
 					return true;
 				} else {
-					if (open_tick.bid > close_tick.bid) { // WIN
+					if (result.open_price > result.close_price) { // WIN
 					   result.win = true;
 					}
 					result.ok = true;
@@ -362,6 +375,24 @@ namespace trading_db {
 			}; // for n
 			async_tasks.wait();
 			if (local_config.on_end_test) local_config.on_end_test();
+		}
+
+		inline bool get_min_max_date(const bool use_tick_data, uint64_t &t_min, uint64_t &t_max) {
+            t_min = 0;
+            t_max = 0;
+            bool is_error = false;
+            for (auto &symbol : symbols_db) {
+                uint64_t t_min_db = 0, t_max_db = 0;
+                if (!symbol->get_min_max_date(use_tick_data, t_min_db, t_max_db)) {
+                    is_error = true;
+                    continue;
+                }
+                if (t_min == 0) t_min = t_min_db;
+                if (t_max == 0) t_max = t_max_db;
+                t_min = std::max(t_min_db, t_min);
+                t_max = std::min(t_max_db, t_max);
+            }
+            return !is_error;
 		}
 
 	};
