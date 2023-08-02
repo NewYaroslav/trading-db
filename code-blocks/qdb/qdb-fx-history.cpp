@@ -26,16 +26,16 @@ void test_all() {
     //{ настройка для теста на истории
 
     // период перед началом теста
-    config.pre_start_period	= 7*ztime::SEC_PER_DAY;
+    config.pre_start_period = 7*ztime::SEC_PER_DAY;
     // дата теста
     config.start_date   = ztime::get_timestamp(10,7,2023,0,0,0);
     config.stop_date    = ztime::get_timestamp(28,7,2023,0,0,0);
     // период опроса тиков на участах времени торговли
     config.tick_period  = 1.0;
     // таймфрейм баров
-    config.timeframe	= 60;
+    config.timeframe    = 60;
     // режим "новый тик" на участах времени торговли
-    config.use_new_tick_mode	= false;
+    config.use_new_tick_mode    = false;
     // время торговли
     config.add_trade_period(trading_db::TimePeriod(trading_db::TimePoint(10, 0, 0), trading_db::TimePoint(10, 0, 59), 1));
     config.add_trade_period(trading_db::TimePeriod(trading_db::TimePoint(11, 0, 0), trading_db::TimePoint(12, 0, 0), 2));
@@ -46,73 +46,73 @@ void test_all() {
 
     // выводим сообщение об ошибке и т.д.
     config.on_msg = [](const std::string &msg) {
-		TRADING_DB_PRINT << "history: " << msg << std::endl;
-	};
+        TRADING_DB_PRINT << "history: " << msg << std::endl;
+    };
 
-	// выводим сообщение о завершении теста на символе
-	config.on_end_test_symbol = [&config](const size_t s_index) {
-		TRADING_DB_PRINT << "history: finished history on symbol " << config.symbols[s_index].symbol << std::endl;
-	};
+    // выводим сообщение о завершении теста на символе
+    config.on_end_test_symbol = [&config](const size_t s_index) {
+        TRADING_DB_PRINT << "history: finished history on symbol " << config.symbols[s_index].symbol << std::endl;
+    };
 
-	// выводим сообщение о завершении работы потока
-	config.on_end_test_thread = [](const size_t i, const size_t n) {
-		//TRADING_DB_PRINT << "history: finished history on thread " << i << " / " << n << std::endl;
-	};
+    // выводим сообщение о завершении работы потока
+    config.on_end_test_thread = [](const size_t i, const size_t n) {
+        //TRADING_DB_PRINT << "history: finished history on thread " << i << " / " << n << std::endl;
+    };
 
-	// выводим сообщение о завершении теста
-	config.on_end_test = []() {
-		TRADING_DB_PRINT << "history: test completed!" << std::endl;
-	};
+    // выводим сообщение о завершении теста
+    config.on_end_test = []() {
+        TRADING_DB_PRINT << "history: test completed!" << std::endl;
+    };
 
-	// выводим сообщение о дате теста
-	config.on_date_msg = [&config](const size_t s_index, const uint64_t t_ms) {
-		//TRADING_DB_PRINT << "history: " << config.symbols[s_index].symbol << " date " << ztime::get_str_date(ztime::ms_to_sec(t_ms)) << std::endl;
-	};
+    // выводим сообщение о дате теста
+    config.on_date_msg = [&config](const size_t s_index, const uint64_t t_ms) {
+        //TRADING_DB_PRINT << "history: " << config.symbols[s_index].symbol << " date " << ztime::get_str_date(ztime::ms_to_sec(t_ms)) << std::endl;
+    };
 
-	// используем все символы
-	config.on_symbol = [](const size_t s_index) -> bool {
-		return true;
-	};
+    // используем все символы
+    config.on_symbol = [](const size_t s_index) -> bool {
+        return true;
+    };
 
-	// событьие получение нового бара
-	config.on_candle = [&config](
-			const size_t				s_index,	// Номер символа
-			const uint64_t				t_ms,		// Время тестера
-			const std::set<int32_t>		&period_id, // Флаг периода теста
-			const trading_db::Candle	&candle		// Данные бара
-			) {
+    // событьие получение нового бара
+    config.on_candle = [&config](
+            const size_t                s_index,    // Номер символа
+            const uint64_t              t_ms,       // Время тестера
+            const std::set<int32_t>     &period_id, // Флаг периода теста
+            const trading_db::Candle    &candle     // Данные бара
+            ) {
         std::string str_period;
-		for (auto &item : period_id) {
-			str_period += std::to_string(item) + ";";
-		}
-		///TRADING_DB_PRINT << "on_candle: " << config.symbols[s_index].symbol << "; c: " << candle.close << "; p: " << str_period << "; t: " << ztime::get_str_time(candle.timestamp) << std::endl;
-	};
+        for (auto &item : period_id) {
+            str_period += std::to_string(item) + ";";
+        }
+        ///TRADING_DB_PRINT << "on_candle: " << config.symbols[s_index].symbol << "; c: " << candle.close << "; p: " << str_period << "; t: " << ztime::get_str_time(candle.timestamp) << std::endl;
+    };
 
-	config.on_tick = [&config](
-			const size_t				s_index,	// Номер символа
-			const uint64_t				t_ms,		// Время тестера
-			const std::set<int32_t>		&period_id, // Флаг периода теста
-			const trading_db::Tick		&tick		// Данные тика
-			) {
-		std::string str_period;
-		for (auto &item : period_id) {
-			str_period += std::to_string(item) + ";";
-		}
-		///TRADING_DB_PRINT << "on_tick: " << config.symbols[s_index].symbol << "; bid: " << tick.bid << "; p: " << str_period << "; t: " << ztime::get_str_time((double)t_ms/1000.0) << std::endl;
-	};
+    config.on_tick = [&config](
+            const size_t                s_index,    // Номер символа
+            const uint64_t              t_ms,       // Время тестера
+            const std::set<int32_t>     &period_id, // Флаг периода теста
+            const trading_db::Tick      &tick       // Данные тика
+            ) {
+        std::string str_period;
+        for (auto &item : period_id) {
+            str_period += std::to_string(item) + ";";
+        }
+        ///TRADING_DB_PRINT << "on_tick: " << config.symbols[s_index].symbol << "; bid: " << tick.bid << "; p: " << str_period << "; t: " << ztime::get_str_time((double)t_ms/1000.0) << std::endl;
+    };
 
-	config.on_test = [&config, &fx_history](
-			const size_t				s_index,	// Номер символа
-			const uint64_t				t_ms,		// Время тестера
-			const std::set<int32_t>		&period_id	// Флаг периода теста
-			) {
-		std::string str_period;
-		for (auto &item : period_id) {
-			str_period += std::to_string(item) + ";";
-		}
-		///TRADING_DB_PRINT << "on_test: " << config.symbols[s_index].symbol << " p: " << str_period << " t: " << ztime::get_str_time(ztime::ms_to_sec(t_ms)) << std::endl;
+    config.on_test = [&config, &fx_history](
+            const size_t                s_index,    // Номер символа
+            const uint64_t              t_ms,       // Время тестера
+            const std::set<int32_t>     &period_id  // Флаг периода теста
+            ) {
+        std::string str_period;
+        for (auto &item : period_id) {
+            str_period += std::to_string(item) + ";";
+        }
+        ///TRADING_DB_PRINT << "on_test: " << config.symbols[s_index].symbol << " p: " << str_period << " t: " << ztime::get_str_time(ztime::ms_to_sec(t_ms)) << std::endl;
 
-		if (period_id.find(3) != period_id.end()) {
+        if (period_id.find(3) != period_id.end()) {
             if (ztime::ms_to_sec(t_ms) == ztime::get_timestamp(27,7,2023,0,0,0)) {
                 const double profit_buy     = -102.41;
                 const uint64_t open_delay   = 5;
@@ -142,14 +142,14 @@ void test_all() {
                 double tolerance = 0.01;
                 EXPECT_NEAR(result.profit, profit_buy, tolerance);
             }
-		}
-	};
+        }
+    };
 
     //}
 
     fx_history.set_config(config);
     ASSERT_TRUE(fx_history.init());
-	fx_history.start();
+    fx_history.start();
 }
 
 TEST(TestCallback, TestQdbFxHistoryV1) {
