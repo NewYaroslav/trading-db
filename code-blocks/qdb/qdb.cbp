@@ -434,6 +434,7 @@
 					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
 					<Add directory="../../lib" />
+					<Add directory="../../lib/googletest/googletest/include" />
 				</Compiler>
 				<Linker>
 					<Add option="-pg -lgmon" />
@@ -441,12 +442,14 @@
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
 					<Add library="zstd" />
+					<Add library="gtest" />
 					<Add directory="../../lib/sqlite_orm/include" />
 					<Add directory="../../lib/sqlite-amalgamation-3340100" />
 					<Add directory="../../lib/ztime-cpp/src" />
 					<Add directory="../../lib/zstd/lib" />
 					<Add directory="../../include" />
 					<Add directory="../../lib" />
+					<Add directory="../../lib/googletest/build/lib" />
 				</Linker>
 			</Target>
 			<Target title="qdb-fx-symbols">

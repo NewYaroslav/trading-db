@@ -1,27 +1,3 @@
-/*
-* xtechnical_analysis - Technical analysis C++ library
-*
-* Copyright (c) 2018-2023 Elektro Yar. Email: git.electroyar@gmail.com
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
-
 #include <iostream>
 #include <gtest/gtest.h>
 #include "trading-db/tools/qdb/fx-symbols-db.hpp"
@@ -30,19 +6,19 @@
 
 void test_eurusd_buy_sell() {
 
-	trading_db::QdbFxSymbolDB::Config config;
-	using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
-	using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
-	using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
+    trading_db::QdbFxSymbolDB::Config config;
+    using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
+    using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
+    using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
 
-	config.symbols = {
+    config.symbols = {
         SymbolConfig("AUDCAD"),
         SymbolConfig("AUDUSD"),
         SymbolConfig("EURUSD"),
         SymbolConfig("USDCAD"),
         SymbolConfig("USDJPY"),
-	};
-	config.path_db = "../../storage/test/";
+    };
+    config.path_db = "../../storage/test/";
     config.account_currency = "USD";
     config.account_leverage = 1;
 
@@ -127,19 +103,19 @@ void test_eurusd_buy_sell() {
 
 void test_usdcad_buy_sell() {
 
-	trading_db::QdbFxSymbolDB::Config config;
-	using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
-	using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
-	using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
+    trading_db::QdbFxSymbolDB::Config config;
+    using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
+    using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
+    using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
 
-	config.symbols = {
+    config.symbols = {
         SymbolConfig("AUDCAD"),
         SymbolConfig("AUDUSD"),
         SymbolConfig("EURUSD"),
         SymbolConfig("USDCAD"),
         SymbolConfig("USDJPY"),
-	};
-	config.path_db = "../../storage/test/";
+    };
+    config.path_db = "../../storage/test/";
     config.account_currency = "USD";
     config.account_leverage = 1;
 
@@ -224,19 +200,19 @@ void test_usdcad_buy_sell() {
 
 void test_audcad_buy_sell() {
 
-	trading_db::QdbFxSymbolDB::Config config;
-	using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
-	using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
-	using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
+    trading_db::QdbFxSymbolDB::Config config;
+    using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
+    using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
+    using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
 
-	config.symbols = {
+    config.symbols = {
         SymbolConfig("AUDCAD"),
         SymbolConfig("AUDUSD"),
         SymbolConfig("EURUSD"),
         SymbolConfig("USDCAD"),
         SymbolConfig("USDJPY"),
-	};
-	config.path_db = "../../storage/test/";
+    };
+    config.path_db = "../../storage/test/";
     config.account_currency = "USD";
     config.account_leverage = 1;
 
@@ -325,12 +301,12 @@ void test_audcad_buy_sell() {
 
 void test_audnzd_buy_sell() {
 
-	trading_db::QdbFxSymbolDB::Config config;
-	using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
-	using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
-	using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
+    trading_db::QdbFxSymbolDB::Config config;
+    using SymbolConfig = trading_db::QdbFxSymbolDB::SymbolConfig;
+    using TradeFxSignal = trading_db::QdbFxSymbolDB::TradeFxSignal;
+    using TradeFxResult = trading_db::QdbFxSymbolDB::TradeFxResult;
 
-	config.symbols = {
+    config.symbols = {
         SymbolConfig("AUDCAD"),
         SymbolConfig("AUDUSD"),
         SymbolConfig("EURUSD"),
@@ -338,8 +314,8 @@ void test_audnzd_buy_sell() {
         SymbolConfig("USDJPY"),
         SymbolConfig("AUDNZD"),
         SymbolConfig("NZDUSD"),
-	};
-	config.path_db = "../../storage/test/";
+    };
+    config.path_db = "../../storage/test/";
     config.account_currency = "USD";
     config.account_leverage = 1;
 

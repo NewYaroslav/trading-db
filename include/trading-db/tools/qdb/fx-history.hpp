@@ -32,7 +32,6 @@ namespace trading_db {
 			double						tick_period			= 1.0;		/**< Период тиков внутри бара (в секундах) */
 			uint64_t					timeframe			= 60;		/**< Таймфрейм исторических данных (в секундах) */
 			bool						use_new_tick_mode	= false;	/**< Режим "новый тик" разрешает событие on_test только при наступлении нового тика */
-			uint64_t					on_date_msg_period 	= ztime::SEC_PER_DAY;	/**< Период вызова callback-функции on_date_msg (UTC, в секундах) */
 
 			std::vector<TimePeriod>		trade_period;					/**< Периоды торговли */
 
@@ -107,11 +106,27 @@ namespace trading_db {
 
 		class InternalConfig {
 		public:
-			std::vector<uint64_t>			time_step_ms;
-			std::vector<bool>				candle_flag;
-			std::vector<std::set<int32_t>>	period_id;
-			QDB_TIMEFRAMES					timeframe	= QDB_TIMEFRAMES::PERIOD_M1;
-            std::map<std::string, size_t>	symbol_to_index;
+			std::vector<uint64_t>			    time_step_ms;
+			std::vector<bool>				    candle_flag;
+			std::vector<std::set<int32_t>>	    period_id;
+			QDB_TIMEFRAMES					    timeframe	= QDB_TIMEFRAMES::PERIOD_M1;
+            std::map<std::string, size_t>	    symbol_to_index;
+            std::map<std::thread::id, size_t>	thread_id_to_index;
+            std::mutex                          thread_id_mutex;
+
+            void add_thread_index(const size_t index) {
+                std::lock_guard<std::mutex> guard(thread_id_mutex);
+                thread_id_to_index[std::this_thread::get_id()] = index;
+            }
+
+            bool get_thread_index(size_t &index) {
+                std::lock_guard<std::mutex> guard(thread_id_mutex);
+                auto it = thread_id_to_index.find(std::this_thread::get_id());
+                if (it == thread_id_to_index.end()) return false;
+                index = it->second;
+                return true;
+            }
+
 		} m_internal_config;
 
 		std::vector<std::shared_ptr<QdbFxSymbolDB>>	m_symbol_db;
@@ -122,10 +137,13 @@ namespace trading_db {
 		// Инициализация базы данных
 		inline bool init_db() {
 			m_symbol_db.clear();
-			for (size_t s = 0; s < m_config.symbols.size(); ++s) {
+			const size_t number_threads = std::thread::hardware_concurrency();
+			for (size_t s = 0; s < number_threads; ++s) {
 				m_symbol_db.push_back(std::make_shared<QdbFxSymbolDB>());
 				m_symbol_db[s]->set_config(m_config);
 				if (!m_symbol_db[s]->init()) return false;
+			}
+			for (size_t s = 0; s < m_config.symbols.size(); ++s) {
 				m_internal_config.symbol_to_index[m_config.symbols[s].symbol] = s;
 			}
 			return true;
@@ -140,7 +158,7 @@ namespace trading_db {
 
 			// Настариваем фильтр времени
 			for (uint64_t t_ms = 0; t_ms < ztime::MS_PER_DAY; t_ms += tick_period_ms) {
-				const uint64_t t = t_ms / ztime::MS_PER_SEC;
+				const uint64_t t = ztime::ms_to_sec(t_ms);
 				std::set<int32_t> period_id;
 				bool is_trade_period = false;
 				for (size_t j = 0; j < m_config.trade_period.size(); ++j) {
@@ -175,28 +193,41 @@ namespace trading_db {
 		}
 
 		inline bool init() noexcept {
-			TRADING_DB_PRINT << "-1" << std::endl;
 			if (!init_db()) return false;
-			TRADING_DB_PRINT << "-2" << std::endl;
 			if (!init_trade()) return false;
-			TRADING_DB_PRINT << "-3" << std::endl;
 			return true;
 		}
 
+        /** \brief Получить индекс рабочего потока
+         * \param index Индекс рабочего потока (находится в диапазоне от 0 до (get_thread_сount() - 1))
+         * \return Вернет true в случае успеха
+         */
+		inline bool get_thread_index(size_t &index) {
+            return m_internal_config.get_thread_index(index);
+        }
+
+        /** \brief Получить количество рабочих потоков
+         * \return Вернет количество рабочих потоков. Индекс рабочего потока будет находиться в диапазоне от 0 до (get_thread_сount() - 1)
+         */
+        inline size_t get_thread_count() {
+            return std::thread::hardware_concurrency();
+        }
+
+        /** \brief Посчитать профит
+         * \param signal Параметры сигнала
+         * \param result Параметры результата
+         * \return Вернет true в случае успеха
+         */
 		inline bool calc_trade_result(
                 const TradeFxSignal &signal,
 				TradeFxResult		&result) {
-            size_t s_index = 0;
-			if (signal.symbol.empty()) {
-				s_index = signal.s_index;
-			} else {
-				auto it = m_internal_config.symbol_to_index.find(signal.symbol);
-				if (it == m_internal_config.symbol_to_index.end()) return false;
-				s_index = it->second;
-			}
-            return m_symbol_db[s_index]->calc_trade_result(signal, result);
+			size_t thread_index = 0;
+            if (!m_internal_config.get_thread_index(thread_index)) return false;
+            return m_symbol_db[thread_index]->calc_trade_result(signal, result);
         }
 
+        /** \brief Запустить тест на истории
+         */
 		void start() {
 			// Количество потоков
 			const size_t number_threads = std::thread::hardware_concurrency();
@@ -206,14 +237,14 @@ namespace trading_db {
 
 			for (size_t n = 0; n < number_threads; ++n) {
 				m_async_tasks.create_task([this, &on_date_mutex, &f_mutex, n, number_threads]() {
+                    m_internal_config.add_thread_index(n);
 
 					// Получаем даты проведения теста
 					const uint64_t start_date_ms =
 						ztime::get_first_timestamp_day(m_config.start_date) *
 						ztime::MS_PER_SEC;
 					const uint64_t pre_start_date_ms =
-						ztime::get_first_timestamp_day(ztime::get_first_timestamp_day(m_config.start_date) -
-						ztime::sec_to_ms(m_config.pre_start_period)) *
+						ztime::get_first_timestamp_day(m_config.start_date - m_config.pre_start_period) *
 						ztime::MS_PER_SEC;
 					const uint64_t stop_date_ms =
 						ztime::get_first_timestamp_day(m_config.stop_date) *
@@ -257,16 +288,16 @@ namespace trading_db {
 									const uint64_t timestamp_minute = ztime::get_first_timestamp_minute(t);
 									const uint64_t timestamp_candle = timestamp_minute - ztime::SEC_PER_MIN;
 									trading_db::Candle db_candle;
-									if (m_symbol_db[s]->get_candle(db_candle, s, timestamp_candle, m_internal_config.timeframe)) {
+									if (m_symbol_db[n]->get_candle(db_candle, s, timestamp_candle, m_internal_config.timeframe)) {
 										m_config.on_candle(s, t_ms, m_internal_config.period_id[i], db_candle);
 										last_update_time_ms = (db_candle.timestamp + ztime::SEC_PER_MIN) * ztime::MS_PER_SEC;
 									}
 									// для режима вызова on_test по новому тику
 									if (m_config.use_new_tick_mode) {
 										trading_db::Tick db_tick;
-										if (m_symbol_db[s]->get_tick_ms(db_tick, s, t_ms)) {
-											const uint64_t prev_timestamp_ms = t_ms - tick_period_ms;
-											if (db_tick.timestamp_ms > prev_timestamp_ms) {
+										if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
+											const uint64_t prev_t_ms = t_ms - tick_period_ms;
+											if (db_tick.t_ms > prev_t_ms) {
 												is_new_tick = true;
 											}
 										}
@@ -275,10 +306,10 @@ namespace trading_db {
 								} else {
 									//{ Вызываем on_tick
 									trading_db::Tick db_tick;
-									if (m_symbol_db[s]->get_tick_ms(db_tick, s, t_ms)) {
+									if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
 										//{ Проверяем, что пришел новый тик нового бара
-										if (db_tick.timestamp_ms > last_update_time_ms) {
-											last_update_time_ms = db_tick.timestamp_ms;
+										if (db_tick.t_ms > last_update_time_ms) {
+											last_update_time_ms = db_tick.t_ms;
 											m_config.on_tick(s, t_ms, m_internal_config.period_id[i], db_tick);
 											is_new_tick = true;
 										}
@@ -312,6 +343,87 @@ namespace trading_db {
 			m_async_tasks.wait();
 			if (m_config.on_end_test) m_config.on_end_test();
 		}
+
+		// ВНИМАНИЕ!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// Методы, представленные дальше, нужно испольтзовать только внутри callback-функций:
+		// on_candle
+		// on_tick
+		// on_test
+		// Это связано с тем, что для каждого рабочего потока есть своя копия базы данных, с которой нужно работать
+
+        inline bool get_candle(
+                Candle &candle,
+                const size_t s_index,
+                const uint64_t t,
+                const QDB_TIMEFRAMES p = QDB_TIMEFRAMES::PERIOD_M1,
+                const QDB_CANDLE_MODE m = QDB_CANDLE_MODE::SRC_CANDLE) noexcept {
+            size_t thread_index = 0;
+            if (!m_internal_config.get_thread_index(thread_index)) return false;
+            if (m_symbol_db.empty()) return false;
+            if (!m_symbol_db[thread_index]) return false;
+            return m_symbol_db[thread_index]->get_candle(candle, s_index, t, p, m);
+        }
+
+        inline bool get_candle(
+                Candle &candle,
+                const std::string &symbol,
+                const uint64_t t,
+                const QDB_TIMEFRAMES p = QDB_TIMEFRAMES::PERIOD_M1,
+                const QDB_CANDLE_MODE m = QDB_CANDLE_MODE::SRC_CANDLE) noexcept {
+            auto it = m_internal_config.symbol_to_index.find(symbol);
+            if (it == m_internal_config.symbol_to_index.end()) return false;
+            return get_candle(candle, it->second, t, p, m);
+        }
+
+        inline bool get_tick(Tick &tick, const size_t s_index, const uint64_t t) noexcept {
+            size_t thread_index = 0;
+            if (!m_internal_config.get_thread_index(thread_index)) return false;
+            if (m_symbol_db.empty()) return false;
+            if (!m_symbol_db[thread_index]) return false;
+            return m_symbol_db[thread_index]->get_tick(tick, s_index, t);
+        }
+
+        inline bool get_tick(Tick &tick, const std::string &symbol, const uint64_t t) noexcept {
+            auto it = m_internal_config.symbol_to_index.find(symbol);
+            if (it == m_internal_config.symbol_to_index.end()) return false;
+            return get_tick(tick, it->second, t);
+        }
+
+        inline bool get_tick_ms(Tick &tick, const size_t s_index, const uint64_t t_ms) noexcept {
+            size_t thread_index = 0;
+            if (!m_internal_config.get_thread_index(thread_index)) return false;
+            if (m_symbol_db.empty()) return false;
+            if (!m_symbol_db[thread_index]) return false;
+            return m_symbol_db[thread_index]->get_tick_ms(tick, s_index, t_ms);
+        }
+
+        inline bool get_tick_ms(Tick &tick, const std::string &symbol, const uint64_t t_ms) noexcept {
+            auto it = m_internal_config.symbol_to_index.find(symbol);
+            if (it == m_internal_config.symbol_to_index.end()) return false;
+            return get_tick_ms(tick, it->second, t_ms);
+        }
+
+        inline bool get_next_tick_ms(Tick &tick, const size_t s_index, const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
+            size_t thread_index = 0;
+            if (!m_internal_config.get_thread_index(thread_index)) return false;
+            if (m_symbol_db.empty()) return false;
+            if (!m_symbol_db[thread_index]) return false;
+            return m_symbol_db[thread_index]->get_next_tick_ms(tick, s_index, t_ms, t_ms_max);
+        }
+
+        inline bool get_next_tick_ms(Tick &tick, const std::string &symbol, const uint64_t t_ms, const uint64_t t_ms_max) noexcept {
+            auto it = m_internal_config.symbol_to_index.find(symbol);
+            if (it == m_internal_config.symbol_to_index.end()) return false;
+            return get_next_tick_ms(tick, it->second, t_ms, t_ms_max);
+        }
+
+        inline bool get_min_max_date(const bool use_tick_data, uint64_t &t_min, uint64_t &t_max) {
+            size_t thread_index = 0;
+            if (!m_internal_config.get_thread_index(thread_index)) return false;
+            if (m_symbol_db.empty()) return false;
+            if (!m_symbol_db[thread_index]) return false;
+            return m_symbol_db[thread_index]->get_min_max_date(use_tick_data, t_min, t_max);
+        }
 	};
 };
 
