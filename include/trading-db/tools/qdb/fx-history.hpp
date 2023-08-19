@@ -66,6 +66,7 @@ namespace trading_db {
             }
 
             std::function<void(
+                    const size_t t_index,
                     const size_t s_index)>      on_end_test_symbol   = nullptr;
 
             std::function<void(
@@ -75,6 +76,7 @@ namespace trading_db {
             std::function<void()>               on_end_test         = nullptr;
 
             std::function<void(
+                    const size_t t_index,
                     const size_t s_index,
                     const uint64_t t_ms)>       on_date_msg = nullptr;
 
@@ -82,6 +84,7 @@ namespace trading_db {
                     const size_t s_index)>      on_symbol   = nullptr;
 
             std::function<void(
+                    const size_t                t_index,    // Номер потока
                     const size_t                s_index,    // Номер символа
                     const uint64_t              t_ms,       // Время тестера
                     const std::set<int32_t>     &period_id, // Флаг периода теста (0 - если нет периода)
@@ -89,6 +92,7 @@ namespace trading_db {
                     )>                          on_candle    = nullptr;
 
             std::function<void(
+                    const size_t                t_index,    // Номер потока
                     const size_t                s_index,    // Номер символа
                     const uint64_t              t_ms,       // Время тестера
                     const std::set<int32_t>     &period_id, // Флаг периода теста (0 - если нет периода)
@@ -96,6 +100,7 @@ namespace trading_db {
                     )>                          on_tick    = nullptr;
 
             std::function<void(
+                    const size_t                t_index,    // Номер потока
                     const size_t                s_index,    // Номер символа
                     const uint64_t              t_ms,       // Время тестера
                     const std::set<int32_t>     &period_id  // Флаг периода теста (0 - если нет периода)
@@ -109,7 +114,7 @@ namespace trading_db {
             std::vector<uint64_t>               time_step_ms;
             std::vector<bool>                   candle_flag;
             std::vector<std::set<int32_t>>      period_id;
-            QDB_TIMEFRAMES                      timeframe   = QDB_TIMEFRAMES::PERIOD_M1;
+            QDB_TIMEFRAMES                      timeframe = QDB_TIMEFRAMES::PERIOD_M1;
             std::map<std::string, size_t>       symbol_to_index;
             std::map<std::thread::id, size_t>   thread_id_to_index;
             std::mutex                          thread_id_mutex;
@@ -179,6 +184,228 @@ namespace trading_db {
             return true;
         }
 
+        void start_v1() {
+            // Количество потоков
+            const size_t number_threads = std::thread::hardware_concurrency();
+            // Блокировщики доступа к callback-функциям
+            std::mutex on_date_mutex;
+            std::mutex f_mutex;
+
+            for (size_t n = 0; n < number_threads; ++n) {
+                m_async_tasks.create_task([this, &on_date_mutex, &f_mutex, n, number_threads]() {
+                    m_internal_config.add_thread_index(n);
+
+                    // Получаем даты проведения теста
+                    const uint64_t start_date_ms =
+                        ztime::get_first_timestamp_day(m_config.start_date) *
+                        ztime::MS_PER_SEC;
+                    const uint64_t pre_start_date_ms =
+                        ztime::get_first_timestamp_day(m_config.start_date - m_config.pre_start_period) *
+                        ztime::MS_PER_SEC;
+                    const uint64_t stop_date_ms =
+                        ztime::get_first_timestamp_day(m_config.stop_date) *
+                        ztime::MS_PER_SEC;
+
+                    //{ Проходимся по всем символам
+                    for (size_t s = n; s < m_config.symbols.size(); s += number_threads) {
+                        // проверяем необходимость обработать символ
+                        if (m_config.on_symbol) {
+                            if (!m_config.on_symbol(s)) continue;
+                        }
+
+                        // Последнее время обновления индикаторов
+                        uint64_t    last_update_time_ms = 0;
+                        // Наличие нового тика
+                        bool        is_new_tick         = false;
+
+                        const uint64_t tick_period_ms = (uint64_t)(m_config.tick_period * (double)ztime::MS_PER_SEC + 0.5);
+                        const uint64_t date_step_ms = ztime::MS_PER_DAY;
+
+                        // Цикл по дате
+                        for (uint64_t date_ms = pre_start_date_ms;
+                            date_ms <= stop_date_ms;
+                            date_ms += date_step_ms) {
+
+                            //{ Выводим сообщение о дате
+                            if (m_config.on_date_msg) {
+                                std::lock_guard<std::mutex> locker(on_date_mutex);
+                                m_config.on_date_msg(n, s, date_ms);
+                            }
+                            //} Выводим сообщение о дате
+
+                            // цикл по времени внутри дня
+                            for (size_t i = 0; i < m_internal_config.time_step_ms.size(); ++i) {
+                                // время внутри дня
+                                const uint64_t t_ms = date_ms + m_internal_config.time_step_ms[i];
+
+                                if (m_internal_config.candle_flag[i]) {
+                                    //{ Вызываем on_candle
+                                    const uint64_t t = ztime::ms_to_sec(t_ms);
+                                    const uint64_t timestamp_minute = ztime::get_first_timestamp_minute(t);
+                                    const uint64_t timestamp_candle = timestamp_minute - ztime::SEC_PER_MIN;
+                                    trading_db::Candle db_candle;
+                                    if (m_symbol_db[n]->get_candle(db_candle, s, timestamp_candle, m_internal_config.timeframe)) {
+                                        m_config.on_candle(n, s, t_ms, m_internal_config.period_id[i], db_candle);
+                                        last_update_time_ms = (db_candle.timestamp + ztime::SEC_PER_MIN) * ztime::MS_PER_SEC;
+                                    }
+                                    // для режима вызова on_test по новому тику
+                                    if (m_config.use_new_tick_mode) {
+                                        trading_db::Tick db_tick;
+                                        if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
+                                            const uint64_t prev_t_ms = t_ms - tick_period_ms;
+                                            if (db_tick.t_ms > prev_t_ms) {
+                                                is_new_tick = true;
+                                            }
+                                        }
+                                    }
+                                    //} Вызываем on_candle
+                                } else {
+                                    //{ Вызываем on_tick
+                                    trading_db::Tick db_tick;
+                                    if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
+                                        //{ Проверяем, что пришел новый тик нового бара
+                                        if (db_tick.t_ms > last_update_time_ms) {
+                                            last_update_time_ms = db_tick.t_ms;
+                                            m_config.on_tick(n, s, t_ms, m_internal_config.period_id[i], db_tick);
+                                            is_new_tick = true;
+                                        }
+                                        //} Проверяем, что пришел новый тик нового бара
+                                    }
+                                    //} Вызываем on_tick
+                                }
+
+                                //{ Вызываем on_test
+                                if (m_config.on_test &&
+                                    date_ms >= start_date_ms &&
+                                    !m_internal_config.period_id[i].empty()) {
+                                    if (!m_config.use_new_tick_mode) {
+                                        m_config.on_test(n, s, t_ms, m_internal_config.period_id[i]);
+                                    } else {
+                                        if (is_new_tick) {
+                                            m_config.on_test(n, s, t_ms, m_internal_config.period_id[i]);
+                                            is_new_tick = false;
+                                        }
+                                    }
+                                }
+                                //} Вызываем on_test
+                            } // for i
+                        } // for date_ms
+                        if (m_config.on_end_test_symbol) m_config.on_end_test_symbol(n, s);
+                    }; // for s
+                    if (m_config.on_end_test_thread) m_config.on_end_test_thread(n, number_threads);
+                    //} Проходимся по всем символам
+                });
+            }; // for n
+            m_async_tasks.wait();
+            if (m_config.on_end_test) m_config.on_end_test();
+        }
+
+        void start_v2() {
+            // Количество потоков
+            const size_t number_threads = std::thread::hardware_concurrency();
+            // Вычисляем количество дней на поток
+            uint64_t total_days = ztime::get_day(
+                ztime::get_first_timestamp_day(m_config.stop_date) -
+                ztime::get_first_timestamp_day(m_config.start_date)) + 1;
+            uint64_t thread_days = (total_days / number_threads);
+
+            // цикл по потоку - отрезку даты
+            for (size_t n = 0; n < number_threads; ++n) {
+                m_async_tasks.create_task([this, n, number_threads, thread_days]() {
+                    m_internal_config.add_thread_index(n);
+
+                    // Получаем даты проведения теста
+                    const uint64_t start_date_ms = ztime::sec_to_ms(ztime::get_first_timestamp_day(m_config.start_date) + n * thread_days * ztime::SEC_PER_DAY);
+                    const uint64_t pre_start_date_ms = start_date_ms - ztime::sec_to_ms(m_config.pre_start_period);
+                    const uint64_t stop_date_ms = n == (number_threads - 1) ?
+                        ztime::sec_to_ms(ztime::get_first_timestamp_day(m_config.stop_date) + ztime::SEC_PER_DAY) :
+                        start_date_ms + ztime::sec_to_ms(thread_days * ztime::SEC_PER_DAY);
+                        //ztime::sec_to_ms(ztime::get_first_timestamp_day(m_config.start_date) + (n + 1) * thread_days * ztime::SEC_PER_DAY);
+                    const uint64_t date_step_ms = ztime::MS_PER_DAY;
+                    const uint64_t tick_period_ms = (uint64_t)(m_config.tick_period * (double)ztime::MS_PER_SEC + 0.5);
+
+                    std::vector<bool> is_new_tick(m_config.symbols.size(), false);
+                    std::vector<uint64_t> last_update_time_ms(m_config.symbols.size(), 0);
+
+                    // Цикл по дате с шагом в 1 день
+                    for (uint64_t date_ms = pre_start_date_ms;
+                        date_ms <= stop_date_ms;
+                        date_ms += date_step_ms) {
+
+                        //{ Выводим сообщение о дате
+                        if (m_config.on_date_msg) {
+                            m_config.on_date_msg(n, 0, date_ms);
+                        }
+                        //} Выводим сообщение о дате
+
+                        // Цикл по времени внутри дня
+                        for (size_t i = 0; i < m_internal_config.time_step_ms.size(); ++i) {
+                            const uint64_t t_ms = date_ms + m_internal_config.time_step_ms[i];
+                            // Цикл по символам
+                            for (size_t s = 0; s < m_config.symbols.size(); ++s) {
+                                if (m_internal_config.candle_flag[i]) {
+                                    //{ Вызываем on_candle
+                                    const uint64_t t = ztime::ms_to_sec(t_ms);
+                                    const uint64_t t_tf = ztime::SEC_PER_MIN * static_cast<uint64_t>(m_internal_config.timeframe);
+                                    const uint64_t t_open_candle = t - t % t_tf - t_tf;
+
+                                    trading_db::Candle db_candle;
+                                    if (m_symbol_db[n]->get_candle(db_candle, s, t_open_candle, m_internal_config.timeframe)) {
+                                        m_config.on_candle(n, s, t_ms, m_internal_config.period_id[i], db_candle);
+                                        last_update_time_ms[s] = ztime::sec_to_ms(db_candle.timestamp + ztime::SEC_PER_MIN * static_cast<uint64_t>(m_internal_config.timeframe));
+                                    }
+
+                                    // для режима вызова on_test по новому тику
+                                    if (m_config.use_new_tick_mode) {
+                                        trading_db::Tick db_tick;
+                                        if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
+                                            const uint64_t prev_t_ms = t_ms - tick_period_ms;
+                                            if (db_tick.t_ms > prev_t_ms) is_new_tick[s] = true;
+                                        }
+                                    }
+                                    //} Вызываем on_candle
+
+                                } else {
+                                    //{ Вызываем on_tick
+                                    trading_db::Tick db_tick;
+                                    if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
+                                        //{ Проверяем, что пришел новый тик нового бара
+                                        if (db_tick.t_ms > last_update_time_ms[s]) {
+                                            last_update_time_ms[s] = db_tick.t_ms;
+                                            m_config.on_tick(n, s, t_ms, m_internal_config.period_id[i], db_tick);
+                                            is_new_tick[s] = true;
+                                        }
+                                        //} Проверяем, что пришел новый тик нового бара
+                                    }
+                                    //} Вызываем on_tick
+                                }
+                            } // for s
+                            for (size_t s = 0; s < m_config.symbols.size(); ++s) {
+                                //{ Вызываем on_test
+                                if (m_config.on_test &&
+                                    date_ms >= start_date_ms &&
+                                    !m_internal_config.period_id[i].empty()) {
+                                    if (!m_config.use_new_tick_mode) {
+                                        m_config.on_test(n, s, t_ms, m_internal_config.period_id[i]);
+                                    } else {
+                                        if (is_new_tick[s]) {
+                                            m_config.on_test(n, s, t_ms, m_internal_config.period_id[i]);
+
+                                        }
+                                    }
+                                }
+                                is_new_tick[s] = false;
+                                //} Вызываем on_test
+                            } // for s
+                        } // for i
+                    } // for date_ms
+                    if (m_config.on_end_test_thread) m_config.on_end_test_thread(n, number_threads);
+                });
+            }; // for n
+            m_async_tasks.wait();
+            if (m_config.on_end_test) m_config.on_end_test();
+        }
+
     public:
 
         QdbFxHistoryV1() {};
@@ -228,120 +455,9 @@ namespace trading_db {
 
         /** \brief Запустить тест на истории
          */
-        void start() {
-            // Количество потоков
-            const size_t number_threads = std::thread::hardware_concurrency();
-            // Блокировщики доступа к callback-функциям
-            std::mutex on_date_mutex;
-            std::mutex f_mutex;
-
-            for (size_t n = 0; n < number_threads; ++n) {
-                m_async_tasks.create_task([this, &on_date_mutex, &f_mutex, n, number_threads]() {
-                    m_internal_config.add_thread_index(n);
-
-                    // Получаем даты проведения теста
-                    const uint64_t start_date_ms =
-                        ztime::get_first_timestamp_day(m_config.start_date) *
-                        ztime::MS_PER_SEC;
-                    const uint64_t pre_start_date_ms =
-                        ztime::get_first_timestamp_day(m_config.start_date - m_config.pre_start_period) *
-                        ztime::MS_PER_SEC;
-                    const uint64_t stop_date_ms =
-                        ztime::get_first_timestamp_day(m_config.stop_date) *
-                        ztime::MS_PER_SEC;
-
-                    //{ Проходимся по всем символам
-                    for (size_t s = n; s < m_config.symbols.size(); s += number_threads) {
-                        // проверяем необходимость обработать символ
-                        if (m_config.on_symbol) {
-                            if (!m_config.on_symbol(s)) continue;
-                        }
-
-                        // Последнее время обновления индикаторов
-                        uint64_t    last_update_time_ms = 0;
-                        // Наличие нового тика
-                        bool        is_new_tick         = false;
-
-                        const uint64_t tick_period_ms = (uint64_t)(m_config.tick_period * (double)ztime::MS_PER_SEC + 0.5);
-                        const uint64_t date_step_ms = ztime::MS_PER_DAY;
-
-                        // Цикл по дате
-                        for (uint64_t date_ms = pre_start_date_ms;
-                            date_ms <= stop_date_ms;
-                            date_ms += date_step_ms) {
-
-                            //{ Выводим сообщение о дате
-                            if (m_config.on_date_msg) {
-                                std::lock_guard<std::mutex> locker(on_date_mutex);
-                                m_config.on_date_msg(s, date_ms);
-                            }
-                            //} Выводим сообщение о дате
-
-                            // цикл по времени внутри дня
-                            for (size_t i = 0; i < m_internal_config.time_step_ms.size(); ++i) {
-                                // время внутри дня
-                                const uint64_t t_ms = date_ms + m_internal_config.time_step_ms[i];
-
-                                if (m_internal_config.candle_flag[i]) {
-                                    //{ Вызываем on_candle
-                                    const uint64_t t = ztime::ms_to_sec(t_ms);
-                                    const uint64_t timestamp_minute = ztime::get_first_timestamp_minute(t);
-                                    const uint64_t timestamp_candle = timestamp_minute - ztime::SEC_PER_MIN;
-                                    trading_db::Candle db_candle;
-                                    if (m_symbol_db[n]->get_candle(db_candle, s, timestamp_candle, m_internal_config.timeframe)) {
-                                        m_config.on_candle(s, t_ms, m_internal_config.period_id[i], db_candle);
-                                        last_update_time_ms = (db_candle.timestamp + ztime::SEC_PER_MIN) * ztime::MS_PER_SEC;
-                                    }
-                                    // для режима вызова on_test по новому тику
-                                    if (m_config.use_new_tick_mode) {
-                                        trading_db::Tick db_tick;
-                                        if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
-                                            const uint64_t prev_t_ms = t_ms - tick_period_ms;
-                                            if (db_tick.t_ms > prev_t_ms) {
-                                                is_new_tick = true;
-                                            }
-                                        }
-                                    }
-                                    //} Вызываем on_candle
-                                } else {
-                                    //{ Вызываем on_tick
-                                    trading_db::Tick db_tick;
-                                    if (m_symbol_db[n]->get_tick_ms(db_tick, s, t_ms)) {
-                                        //{ Проверяем, что пришел новый тик нового бара
-                                        if (db_tick.t_ms > last_update_time_ms) {
-                                            last_update_time_ms = db_tick.t_ms;
-                                            m_config.on_tick(s, t_ms, m_internal_config.period_id[i], db_tick);
-                                            is_new_tick = true;
-                                        }
-                                        //} Проверяем, что пришел новый тик нового бара
-                                    }
-                                    //} Вызываем on_tick
-                                }
-
-                                //{ Вызываем on_test
-                                if (m_config.on_test &&
-                                    date_ms >= start_date_ms &&
-                                    !m_internal_config.period_id[i].empty()) {
-                                    if (!m_config.use_new_tick_mode) {
-                                        m_config.on_test(s, t_ms, m_internal_config.period_id[i]);
-                                    } else {
-                                        if (is_new_tick) {
-                                            m_config.on_test(s, t_ms, m_internal_config.period_id[i]);
-                                            is_new_tick = false;
-                                        }
-                                    }
-                                }
-                                //} Вызываем on_test
-                            } // for i
-                        } // for date_ms
-                        if (m_config.on_end_test_symbol) m_config.on_end_test_symbol(s);
-                    }; // for s
-                    if (m_config.on_end_test_thread) m_config.on_end_test_thread(n, number_threads);
-                    //} Проходимся по всем символам
-                });
-            }; // for n
-            m_async_tasks.wait();
-            if (m_config.on_end_test) m_config.on_end_test();
+        void start(const QDB_HISTORY_TEST_MODE mode) {
+            if (mode == QDB_HISTORY_TEST_MODE::SYMBOL) start_v1();
+            if (mode == QDB_HISTORY_TEST_MODE::SEGMENT) start_v2();
         }
 
         // ВНИМАНИЕ!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

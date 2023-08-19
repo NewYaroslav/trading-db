@@ -12,3 +12,13 @@
 
 Примеры можно найти в code-blocks/examples и code-blocks/qdb
 
+### Сборка библиотеки googletest под MinGW
+
+В папке библиотеки lib/ googletest сделать следующее:
+
+```
+mkdir build
+cd build
+cmake .. -G "MinGW Makefiles"
+mingw32-make.exe
+```

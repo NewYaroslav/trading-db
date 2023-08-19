@@ -28,6 +28,11 @@ namespace trading_db {
 		PERIOD_D1	= 1440,
 	};
 
+    enum class QDB_HISTORY_TEST_MODE {
+        SYMBOL,
+        SEGMENT,
+    };
+
 };
 
 #endif // TRADING_DB_QDB_ENUMS_HPP_INCLUDED
